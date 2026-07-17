@@ -27,6 +27,8 @@ export function GameScreen() {
   const aiThinking = useGameStore((s) => s.aiThinking);
   const history = useGameStore((s) => s.history);
   const log = useGameStore((s) => s.log);
+  const aiLastSystems = useGameStore((s) => s.aiLastSystems);
+  const settings = useGameStore((s) => s.settings);
   const playHuman = useGameStore((s) => s.playHuman);
   const undo = useGameStore((s) => s.undo);
   const abandonGame = useGameStore((s) => s.abandonGame);
@@ -131,7 +133,7 @@ export function GameScreen() {
           {game.phase === 'finished'
             ? 'Game over'
             : aiThinking
-            ? 'Opponent is thinking…'
+            ? `Opponent is thinking… (${settings.difficulty})`
             : humanTurn
             ? game.phase === 'setup'
               ? 'Found your homeworld'
@@ -152,6 +154,14 @@ export function GameScreen() {
 
       {aiThinking && <ActivityIndicator color={theme.accent} style={{ marginTop: 4 }} />}
 
+      {/* Latest-move ticker */}
+      {log.length > 0 && (
+        <Text style={styles.ticker} numberOfLines={1}>
+          Last: {log[log.length - 1].player === humanPlayer ? 'You' : 'AI'} ·{' '}
+          {log[log.length - 1].text}
+        </Text>
+      )}
+
       {/* Board */}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: 6 }}>
         {ordered.map((sys) => (
@@ -163,6 +173,7 @@ export function GameScreen() {
             moveTargets={moveTargets}
             attackTargets={attackTargets}
             dimmed={sel !== null && sys.id !== sel.system && !moveTargets.has(sys.id)}
+            recent={aiLastSystems.includes(sys.id)}
             interactive={humanTurn}
             onPressOwnShip={(system, ship) =>
               setSel(sel && sel.system === system && samePiece(sel.ship, ship) ? null : { system, ship })
@@ -495,6 +506,13 @@ const styles = StyleSheet.create({
   },
   btnText: { color: theme.text, fontSize: 13, fontWeight: '600' },
   hint: { color: theme.textDim, fontSize: 11, marginTop: 4 },
+  ticker: {
+    color: theme.textDim,
+    fontSize: 12,
+    paddingHorizontal: 14,
+    paddingBottom: 4,
+    textAlign: 'center',
+  },
   logHeader: { paddingHorizontal: 14, paddingVertical: 8 },
   logTitle: { color: theme.textDim, fontWeight: '700', fontSize: 13 },
   logEntry: { color: theme.textDim, fontSize: 12, paddingHorizontal: 18, paddingVertical: 1 },

@@ -40,6 +40,8 @@ interface Store {
   humanPlayer: PlayerId;
   aiThinking: boolean;
   hydrated: boolean;
+  /** Systems the AI touched on its last turn (for the "what changed" highlight). */
+  aiLastSystems: number[];
 
   setScreen: (s: Screen) => void;
   setSettings: (s: Partial<Settings>) => void;
@@ -54,11 +56,11 @@ interface Store {
 let aiRunning = false;
 
 async function persist(get: () => Store): Promise<void> {
-  const { game, log, history, settings, humanPlayer } = get();
+  const { game, log, history, settings, humanPlayer, aiLastSystems } = get();
   try {
     await AsyncStorage.setItem(
       SAVE_KEY,
-      JSON.stringify({ game, log, history, settings, humanPlayer })
+      JSON.stringify({ game, log, history, settings, humanPlayer, aiLastSystems })
     );
   } catch {
     // Persistence is best-effort; never crash gameplay over it.
@@ -74,9 +76,14 @@ async function runAI(
   try {
     // Loop: one AI "turn" can be several atomic moves (setup, sacrifice
     // chains, catastrophe declarations, end-of-turn confirmations).
+    let touched: number[] | null = null;
     for (;;) {
       const { game, humanPlayer, settings, log } = get();
       if (!game || game.phase === 'finished' || game.current === humanPlayer) break;
+      if (touched === null) {
+        touched = [];
+        set({ aiLastSystems: [] });
+      }
       set({ aiThinking: true });
       // Give the UI a beat so the "thinking" state paints before search starts.
       await new Promise((r) => setTimeout(r, 250));
@@ -86,12 +93,16 @@ async function runAI(
       const current = get().game;
       if (current !== game) continue;
       const next = applyMove(game, move);
+      if ('system' in move) touched.push(move.system);
+      if (move.type === 'move') touched.push(move.to);
+      if (move.type === 'discover') touched.push(next.nextSystemId - 1);
       set({
         game: next,
         log: [
           ...log,
           { player: game.current, turn: game.turn, text: moveToNotation(game, move) },
         ],
+        aiLastSystems: [...new Set(touched)],
       });
       void persist(get);
     }
@@ -110,6 +121,7 @@ export const useGameStore = create<Store>((set, get) => ({
   humanPlayer: 0,
   aiThinking: false,
   hydrated: false,
+  aiLastSystems: [],
 
   setScreen: (screen) => set({ screen }),
 
@@ -126,13 +138,14 @@ export const useGameStore = create<Store>((set, get) => ({
       history: [],
       humanPlayer: settings.humanFirst ? 0 : 1,
       screen: 'game',
+      aiLastSystems: [],
     });
     void persist(get);
     void runAI(get, set);
   },
 
   abandonGame: () => {
-    set({ game: null, log: [], history: [], screen: 'menu' });
+    set({ game: null, log: [], history: [], screen: 'menu', aiLastSystems: [] });
     void persist(get);
   },
 
@@ -177,6 +190,7 @@ export const useGameStore = create<Store>((set, get) => ({
           log: data.log ?? [],
           history: data.history ?? [],
           humanPlayer: data.humanPlayer ?? 0,
+          aiLastSystems: data.aiLastSystems ?? [],
           screen: data.game && data.game.phase !== 'finished' ? 'game' : 'menu',
         });
       }

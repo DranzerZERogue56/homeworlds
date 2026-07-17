@@ -1,5 +1,5 @@
-import React from 'react';
-import { Pressable, StyleSheet, View, ViewStyle } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Pressable, StyleSheet, View, ViewStyle } from 'react-native';
 import { Piece } from '../engine';
 import { pieceColors, theme } from './theme';
 
@@ -17,6 +17,26 @@ const BASE = { 1: 20, 2: 28, 3: 36 } as const;
 
 /** A Looney pyramid as a plain-View triangle (no image assets). */
 export function Pyramid({ piece, kind, selected, highlighted, onPress, disabled }: Props) {
+  const pulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (selected || highlighted) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, { toValue: 0.55, duration: 550, useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 1, duration: 550, useNativeDriver: true }),
+        ])
+      );
+      loop.start();
+      return () => {
+        loop.stop();
+        pulse.setValue(1);
+      };
+    }
+    pulse.setValue(1);
+    return undefined;
+  }, [selected, highlighted, pulse]);
+
   const w = BASE[piece.size];
   const h = Math.round(w * 1.05);
   const color = pieceColors[piece.color];
@@ -85,11 +105,19 @@ export function Pyramid({ piece, kind, selected, highlighted, onPress, disabled 
       style={({ pressed }) => [
         styles.wrap,
         selected && styles.selected,
-        highlighted && styles.highlighted,
         pressed && { opacity: 0.6 },
       ]}
       hitSlop={10}
     >
+      {(selected || highlighted) && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.ring,
+            { opacity: pulse, borderColor: selected ? theme.accent : theme.highlight },
+          ]}
+        />
+      )}
       {body}
     </Pressable>
   );
@@ -100,11 +128,17 @@ const styles = StyleSheet.create({
     padding: 5,
     margin: 1,
     borderRadius: 6,
-    borderWidth: 2,
-    borderColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'flex-end',
   },
-  selected: { borderColor: theme.accent, backgroundColor: '#26304a' },
-  highlighted: { borderColor: theme.highlight },
+  selected: { backgroundColor: '#26304a' },
+  ring: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 6,
+    borderWidth: 2,
+  },
 });

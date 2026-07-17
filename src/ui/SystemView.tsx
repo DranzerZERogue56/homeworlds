@@ -1,8 +1,20 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Piece, PlayerId, System, pieceKey } from '../engine';
+import { COLORS, Color, Piece, PlayerId, System, pieceKey } from '../engine';
 import { Pyramid } from './Pyramid';
-import { theme } from './theme';
+import { colorNames, pieceColors, theme } from './theme';
+
+/** Colors with 3+ pieces here are one build away from a catastrophe. */
+function dangers(system: System): { color: Color; count: number }[] {
+  const out: { color: Color; count: number }[] = [];
+  for (const c of COLORS) {
+    let n = 0;
+    for (const p of system.stars) if (p.color === c) n++;
+    for (const side of system.ships) for (const p of side) if (p.color === c) n++;
+    if (n >= 3) out.push({ color: c, count: n });
+  }
+  return out;
+}
 
 interface Props {
   system: System;
@@ -18,6 +30,8 @@ interface Props {
   interactive: boolean;
   /** True when a ship is selected elsewhere and this system is unreachable. */
   dimmed?: boolean;
+  /** True when the AI touched this system on its last turn. */
+  recent?: boolean;
 }
 
 export function SystemView({
@@ -31,7 +45,9 @@ export function SystemView({
   onPressSystem,
   interactive,
   dimmed,
+  recent,
 }: Props) {
+  const danger = dangers(system);
   const enemy: PlayerId = humanPlayer === 0 ? 1 : 0;
   const isTarget = moveTargets.has(system.id);
   const selHere = selectedShip?.system === system.id;
@@ -59,6 +75,20 @@ export function SystemView({
           {label}
           {isTarget ? '  ◉ move here' : ''}
         </Text>
+        <View style={styles.badgeRow}>
+          {danger.map((dz) => (
+            <Text
+              key={dz.color}
+              style={[
+                styles.dangerBadge,
+                { color: pieceColors[dz.color], borderColor: pieceColors[dz.color] },
+              ]}
+            >
+              {dz.count >= 4 ? '☄' : '⚠'} {colorNames[dz.color].toLowerCase()} ×{dz.count}
+            </Text>
+          ))}
+          {recent && <Text style={styles.recentBadge}>⟡ opponent</Text>}
+        </View>
       </View>
 
       <View style={styles.row}>
@@ -125,8 +155,19 @@ const styles = StyleSheet.create({
   },
   homeCard: { borderColor: '#4a5a8f', backgroundColor: theme.panelHi },
   target: { borderColor: theme.highlight, borderWidth: 2 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   name: { color: theme.textDim, fontSize: 12, fontWeight: '600', marginBottom: 2 },
+  badgeRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  dangerBadge: {
+    fontSize: 10,
+    fontWeight: '700',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    overflow: 'hidden',
+  },
+  recentBadge: { color: theme.accent, fontSize: 10, fontWeight: '700' },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   stars: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   shipGroup: {
