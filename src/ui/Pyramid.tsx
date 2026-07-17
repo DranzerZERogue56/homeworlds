@@ -11,12 +11,14 @@ interface Props {
   highlighted?: boolean;
   onPress?: () => void;
   disabled?: boolean;
+  /** Shrink/grow the pyramid (map nodes use ~0.7). */
+  scale?: number;
 }
 
 const BASE = { 1: 20, 2: 28, 3: 36 } as const;
 
 /** A Looney pyramid as a plain-View triangle (no image assets). */
-export function Pyramid({ piece, kind, selected, highlighted, onPress, disabled }: Props) {
+export function Pyramid({ piece, kind, selected, highlighted, onPress, disabled, scale = 1 }: Props) {
   const pulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -37,7 +39,7 @@ export function Pyramid({ piece, kind, selected, highlighted, onPress, disabled 
     return undefined;
   }, [selected, highlighted, pulse]);
 
-  const w = BASE[piece.size];
+  const w = Math.round(BASE[piece.size] * scale);
   const h = Math.round(w * 1.05);
   const color = pieceColors[piece.color];
 

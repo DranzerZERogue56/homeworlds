@@ -27,7 +27,7 @@ export function makeState(spec: {
   }[];
   current?: PlayerId;
   phase?: GameState['phase'];
-  sacrifice?: { color: Color; actionsLeft: number } | null;
+  sacrifice?: { color: Color; actionsLeft: number; total?: number } | null;
 }): GameState {
   const bank: Bank = fullBank();
   const take = (piece: Piece) => {
@@ -51,7 +51,9 @@ export function makeState(spec: {
     current: spec.current ?? 0,
     phase: spec.phase ?? 'main',
     setupDone: 2,
-    sacrifice: spec.sacrifice ?? null,
+    sacrifice: spec.sacrifice
+      ? { ...spec.sacrifice, total: spec.sacrifice.total ?? spec.sacrifice.actionsLeft }
+      : null,
     winner: null,
     nextSystemId: Math.max(...systems.map((s) => s.id)) + 1,
     turn: 10,

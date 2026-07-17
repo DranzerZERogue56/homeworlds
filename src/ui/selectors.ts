@@ -5,6 +5,7 @@ import {
   Piece,
   PlayerId,
   applyMove,
+  getLegalMoves,
   pieceKey,
   samePiece,
 } from '../engine';
@@ -131,4 +132,63 @@ export function sacrificeHint(color: Color): string {
     case 'r':
       return 'Tap your ship at a contested system, then tap the enemy ship to capture.';
   }
+}
+
+/** Stable key for "this ship at this system". */
+export const shipKey = (system: number, ship: Piece): string =>
+  `${system}:${pieceKey(ship)}`;
+
+/**
+ * Keys of the player's ships that would offer at least one action if tapped.
+ * Build/attack actions belong to the whole system, so every own ship there
+ * counts; move/trade/discover/sacrifice attach to the specific ship.
+ */
+export function actionableShipKeys(legal: Move[], state: GameState): Set<string> {
+  const me = state.current;
+  const out = new Set<string>();
+  const wholeSystem = new Set<number>();
+  for (const m of legal) {
+    switch (m.type) {
+      case 'build':
+      case 'attack':
+        wholeSystem.add(m.system);
+        break;
+      case 'move':
+      case 'trade':
+      case 'discover':
+      case 'sacrifice':
+        out.add(shipKey(m.system, m.ship));
+        break;
+      default:
+        break;
+    }
+  }
+  for (const sys of state.systems) {
+    if (!wholeSystem.has(sys.id)) continue;
+    for (const ship of sys.ships[me]) out.add(shipKey(sys.id, ship));
+  }
+  return out;
+}
+
+/**
+ * Sacrifice progress for the guided banner. `total` was added to SacrificeInfo
+ * later, so older saved games fall back to actionsLeft.
+ */
+export function sacrificeProgress(
+  state: GameState
+): { color: Color; step: number; total: number; left: number; stuck: boolean; legalActions: number } | null {
+  if (state.phase !== 'sacrifice' || !state.sacrifice) return null;
+  const { color, actionsLeft } = state.sacrifice;
+  const total = state.sacrifice.total ?? actionsLeft;
+  const legalActions = getLegalMoves(state).filter(
+    (m) => m.type !== 'end' && m.type !== 'catastrophe'
+  ).length;
+  return {
+    color,
+    step: total - actionsLeft + 1,
+    total,
+    left: actionsLeft,
+    stuck: legalActions === 0,
+    legalActions,
+  };
 }

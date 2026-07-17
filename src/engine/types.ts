@@ -38,6 +38,8 @@ export type Phase =
 export interface SacrificeInfo {
   color: Color;
   actionsLeft: number;
+  /** Size of the sacrificed ship = total actions granted (for "action 2 of 3" UI). */
+  total: number;
 }
 
 export type Winner = PlayerId | 'draw';

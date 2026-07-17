@@ -433,7 +433,7 @@ export function applyMove(prev: GameState, move: Move): GameState {
       if (!sys) throw new IllegalMove('no such system');
       const ship = removeShip(sys.ships[me], move.ship);
       returnToBank(state.bank, ship);
-      state.sacrifice = { color: ship.color, actionsLeft: ship.size };
+      state.sacrifice = { color: ship.color, actionsLeft: ship.size, total: ship.size };
       state.phase = 'sacrifice';
       sweepSystems(state);
       checkDestruction(state);

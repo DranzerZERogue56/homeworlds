@@ -298,7 +298,7 @@ describe('sacrifice', () => {
     });
     s = playLegal(s, { type: 'sacrifice', system: 0, ship: p('g', 3) });
     expect(s.phase).toBe('sacrifice');
-    expect(s.sacrifice).toEqual({ color: 'g', actionsLeft: 3 });
+    expect(s.sacrifice).toEqual({ color: 'g', actionsLeft: 3, total: 3 });
     expect(bankCount(s, p('g', 3))).toBe(3);
 
     // Only green actions (plus end) are offered; the system has no green star/ship
@@ -328,7 +328,7 @@ describe('sacrifice', () => {
       ],
     });
     s = playLegal(s, { type: 'sacrifice', system: 0, ship: p('y', 2) });
-    expect(s.sacrifice).toEqual({ color: 'y', actionsLeft: 2 });
+    expect(s.sacrifice).toEqual({ color: 'y', actionsLeft: 2, total: 2 });
     expect(() => applyMove(s, { type: 'build', system: 0, color: 'g' })).toThrow();
     const legal = getLegalMoves(s);
     expect(

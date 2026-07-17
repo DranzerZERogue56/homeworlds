@@ -65,7 +65,7 @@ describe('sacrifice turn through the store', () => {
 
     let g = useGameStore.getState().game!;
     expect(g.phase).toBe('sacrifice');
-    expect(g.sacrifice).toEqual({ color: 'y', actionsLeft: 2 });
+    expect(g.sacrifice).toEqual({ color: 'y', actionsLeft: 2, total: 2 });
 
     // 2. First yellow action: move g1 to system 2 (home {1,2} -> {3} connects).
     legal = getLegalMoves(g);

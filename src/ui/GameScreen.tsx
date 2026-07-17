@@ -12,12 +12,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, Move, Piece, SIZES, getLegalMoves, pieceKey, samePiece } from '../engine';
 import { useGameStore } from '../store/gameStore';
+import { ActionSheet } from './ActionSheet';
 import { BankPanel } from './BankPanel';
+import { GalaxyMap } from './GalaxyMap';
 import { Pyramid } from './Pyramid';
-import { derive, moveLosesGame, sacrificeHint, Selection } from './selectors';
+import { actionableShipKeys, derive, moveLosesGame, Selection } from './selectors';
 import { Starfield } from './Starfield';
-import { SystemView } from './SystemView';
-import { colorNames, pieceColors, theme } from './theme';
+import { TurnGuide } from './TurnGuide';
+import { colorNames, theme } from './theme';
 
 type Sel = Selection | null;
 
@@ -52,6 +54,10 @@ export function GameScreen() {
         setBankOpen(false);
         return true;
       }
+      if (logOpen) {
+        setLogOpen(false);
+        return true;
+      }
       if (sel) {
         setSel(null);
         return true;
@@ -60,30 +66,23 @@ export function GameScreen() {
       return true;
     });
     return () => sub.remove();
-  }, [discoverOpen, bankOpen, sel, setScreen]);
+  }, [discoverOpen, bankOpen, logOpen, sel, setScreen]);
 
-  const humanTurn = !!game && game.phase !== 'finished' && game.current === humanPlayer && !aiThinking;
+  const humanTurn =
+    !!game && game.phase !== 'finished' && game.current === humanPlayer && !aiThinking;
   const legal = useMemo(
     () => (game && humanTurn ? getLegalMoves(game) : []),
     [game, humanTurn]
+  );
+  const actionable = useMemo(
+    () => (game && humanTurn ? actionableShipKeys(legal, game) : new Set<string>()),
+    [game, humanTurn, legal]
   );
 
   if (!game) return null;
 
   // All tappable options derive from getLegalMoves via the tested selector.
   const d = derive(legal, sel);
-  const {
-    moveTargets,
-    moveMoves,
-    attackTargets,
-    attackMoves,
-    buildMoves,
-    tradeMoves,
-    discoverMoves,
-    sacrificeMove,
-    catastropheMoves,
-    endMove,
-  } = d;
 
   const play = (move: Move) => {
     // Guard rail: warn before a move that immediately loses the game
@@ -112,47 +111,76 @@ export function GameScreen() {
     playHuman(move);
   };
 
-  // ----- board ordering: enemy home, colonies, own home ----------------------
-  const enemy = humanPlayer === 0 ? 1 : 0;
-  const enemyHome = game.systems.filter((s) => s.home === enemy);
-  const colonies = game.systems.filter((s) => s.home === undefined);
-  const myHome = game.systems.filter((s) => s.home === humanPlayer);
-  const ordered = [...enemyHome, ...colonies, ...myHome];
-
   const sysName = (id: number) => game.systems.find((s) => s.id === id)?.name ?? '?';
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + 6, paddingBottom: insets.bottom }]}>
       <Starfield />
+
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => setScreen('menu')} hitSlop={10}>
           <Text style={styles.headerBtn}>‹ Menu</Text>
         </Pressable>
         <Text style={styles.headerTitle}>
-          {game.phase === 'finished'
-            ? 'Game over'
-            : aiThinking
-            ? `Opponent is thinking… (${settings.difficulty})`
-            : humanTurn
-            ? game.phase === 'setup'
-              ? 'Found your homeworld'
-              : 'Your turn'
-            : 'Opponent’s turn'}
+          {game.phase === 'finished' ? 'Game over' : humanTurn ? 'Your turn' : ' '}
         </Text>
-        <View style={{ flexDirection: 'row', gap: 18 }}>
+        <View style={{ flexDirection: 'row', gap: 16 }}>
           <Pressable onPress={undo} disabled={history.length === 0 || aiThinking} hitSlop={10}>
-            <Text style={[styles.headerBtn, (history.length === 0 || aiThinking) && styles.disabled]}>
+            <Text
+              style={[styles.headerBtn, (history.length === 0 || aiThinking) && styles.disabled]}
+            >
               Undo
             </Text>
           </Pressable>
           <Pressable onPress={() => setBankOpen(true)} hitSlop={10}>
             <Text style={styles.headerBtn}>Bank</Text>
           </Pressable>
+          <Pressable onPress={() => setLogOpen(true)} hitSlop={10}>
+            <Text style={styles.headerBtn}>Log</Text>
+          </Pressable>
         </View>
       </View>
 
-      {aiThinking && <ActivityIndicator color={theme.accent} style={{ marginTop: 4 }} />}
+      {aiThinking && <ActivityIndicator color={theme.accent} style={{ marginBottom: 2 }} />}
+
+      {/* Always-on "what do I do now" strip */}
+      <TurnGuide
+        game={game}
+        humanTurn={humanTurn}
+        aiThinking={aiThinking}
+        difficulty={settings.difficulty}
+        hasSelection={sel !== null}
+        catastropheMoves={humanTurn ? d.catastropheMoves : []}
+        endMove={humanTurn ? d.endMove : undefined}
+        sysName={sysName}
+        onPlay={play}
+      />
+
+      {/* The galaxy */}
+      <GalaxyMap
+        systems={game.systems}
+        humanPlayer={humanPlayer}
+        selected={sel}
+        moveTargets={d.moveTargets}
+        attackTargets={d.attackTargets}
+        actionable={actionable}
+        recent={aiLastSystems}
+        interactive={humanTurn}
+        onPressOwnShip={(system, ship) =>
+          setSel(
+            sel && sel.system === system && samePiece(sel.ship, ship) ? null : { system, ship }
+          )
+        }
+        onPressEnemyShip={(system, target) => {
+          const m = d.attackMoves.find((x) => x.system === system && samePiece(x.target, target));
+          if (m) play(m);
+        }}
+        onPressSystem={(to) => {
+          const m = d.moveMoves.find((x) => x.to === to);
+          if (m) play(m);
+        }}
+      />
 
       {/* Latest-move ticker */}
       {log.length > 0 && (
@@ -162,157 +190,17 @@ export function GameScreen() {
         </Text>
       )}
 
-      {/* Board */}
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: 6 }}>
-        {ordered.map((sys) => (
-          <SystemView
-            key={sys.id}
-            system={sys}
-            humanPlayer={humanPlayer}
-            selectedShip={sel}
-            moveTargets={moveTargets}
-            attackTargets={attackTargets}
-            dimmed={sel !== null && sys.id !== sel.system && !moveTargets.has(sys.id)}
-            recent={aiLastSystems.includes(sys.id)}
-            interactive={humanTurn}
-            onPressOwnShip={(system, ship) =>
-              setSel(sel && sel.system === system && samePiece(sel.ship, ship) ? null : { system, ship })
-            }
-            onPressEnemyShip={(system, target) => {
-              const m = attackMoves.find(
-                (x) => x.system === system && samePiece(x.target, target)
-              );
-              if (m) play(m);
-            }}
-            onPressSystem={(to) => {
-              const m = moveMoves.find((x) => x.to === to);
-              if (m) play(m);
-            }}
-          />
-        ))}
-
-        {/* Move log */}
-        <Pressable style={styles.logHeader} onPress={() => setLogOpen(!logOpen)}>
-          <Text style={styles.logTitle}>
-            Move log ({log.length}) {logOpen ? '▾' : '▸'}
-          </Text>
-        </Pressable>
-        {logOpen &&
-          log
-            .slice()
-            .reverse()
-            .map((e, i) => (
-              <Text key={i} style={styles.logEntry}>
-                {e.player === humanPlayer ? 'You' : 'AI'} · {e.text}
-              </Text>
-            ))}
-      </ScrollView>
-
-      {/* Status banners */}
-      {humanTurn && game.phase === 'sacrifice' && game.sacrifice && (
-        <View style={[styles.banner, { borderColor: pieceColors[game.sacrifice.color] }]}>
-          <View style={styles.sacrificeRow}>
-            <Text style={styles.bannerText}>
-              {colorNames[game.sacrifice.color]} sacrifice
-            </Text>
-            <View style={styles.pipRow}>
-              {Array.from({ length: game.sacrifice.actionsLeft }).map((_, i) => (
-                <View
-                  key={i}
-                  style={[styles.pip, { backgroundColor: pieceColors[game.sacrifice!.color] }]}
-                />
-              ))}
-            </View>
-            <Text style={styles.bannerText}>
-              {game.sacrifice.actionsLeft} action{game.sacrifice.actionsLeft === 1 ? '' : 's'} left
-            </Text>
-          </View>
-          <Text style={styles.hint}>{sacrificeHint(game.sacrifice.color)}</Text>
-          {endMove && (
-            <ActionButton label="End turn (forfeit remaining)" onPress={() => play(endMove)} />
-          )}
-        </View>
-      )}
-      {humanTurn && game.phase === 'post' && (
-        <View style={styles.banner}>
-          <Text style={styles.bannerText}>Action complete.</Text>
-          {endMove && <ActionButton label="End turn" onPress={() => play(endMove)} />}
-        </View>
-      )}
-      {humanTurn && game.phase === 'main' && endMove && (
-        <View style={styles.banner}>
-          <Text style={styles.bannerText}>No actions available.</Text>
-          <ActionButton label="Pass" onPress={() => play(endMove)} />
-        </View>
-      )}
-      {humanTurn && catastropheMoves.length > 0 && (
-        <View style={[styles.banner, { borderColor: theme.danger }]}>
-          <Text style={[styles.bannerText, { color: theme.danger }]}>Catastrophe available!</Text>
-          <View style={styles.chipRow}>
-            {catastropheMoves.map((m, i) => (
-              <ActionButton
-                key={i}
-                danger
-                label={`${colorNames[m.color]} at ${sysName(m.system)}`}
-                onPress={() => play(m)}
-              />
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* Selected-ship action panel */}
-      {humanTurn && sel && game.phase !== 'setup' && (
-        <View style={styles.actionPanel}>
-          <View style={styles.actionHeader}>
-            <Text style={styles.actionTitle}>
-              {colorNames[sel.ship.color]} {sel.ship.size} at {sysName(sel.system)}
-            </Text>
-            <Pressable onPress={() => setSel(null)} hitSlop={8}>
-              <Text style={styles.headerBtn}>Cancel</Text>
-            </Pressable>
-          </View>
-          <View style={styles.chipRow}>
-            {buildMoves.map((m, i) => (
-              <ActionButton
-                key={`b${i}`}
-                label={`Build ${colorNames[m.color].toLowerCase()}`}
-                color={pieceColors[m.color]}
-                onPress={() => play(m)}
-              />
-            ))}
-            {tradeMoves.map((m, i) => (
-              <ActionButton
-                key={`t${i}`}
-                label={`Trade → ${colorNames[m.toColor].toLowerCase()}`}
-                color={pieceColors[m.toColor]}
-                onPress={() => play(m)}
-              />
-            ))}
-            {discoverMoves.length > 0 && (
-              <ActionButton label="Discover…" onPress={() => setDiscoverOpen(true)} />
-            )}
-            {sacrificeMove && (
-              <ActionButton
-                danger
-                label={`Sacrifice (${sel.ship.size} ${colorNames[sel.ship.color].toLowerCase()})`}
-                onPress={() => play(sacrificeMove)}
-              />
-            )}
-          </View>
-          {moveTargets.size > 0 && (
-            <Text style={styles.hint}>Tap a highlighted system to move there.</Text>
-          )}
-          {attackTargets.size > 0 && (
-            <Text style={styles.hint}>Tap a highlighted enemy ship to capture it.</Text>
-          )}
-          {d.selectionIsDead && (
-            <Text style={[styles.hint, { color: theme.danger }]}>
-              This ship has no legal action right now — try another ship
-              {endMove ? ' or end the turn' : ''}.
-            </Text>
-          )}
-        </View>
+      {/* Selected-ship drawer */}
+      {humanTurn && game.phase !== 'setup' && (
+        <ActionSheet
+          selection={sel}
+          derived={d}
+          sysName={sysName}
+          sacrificing={game.phase === 'sacrifice'}
+          onPlay={play}
+          onDiscover={() => setDiscoverOpen(true)}
+          onCancel={() => setSel(null)}
+        />
       )}
 
       {/* Guided homeworld setup */}
@@ -330,9 +218,36 @@ export function GameScreen() {
                 : 'You lose'}
             </Text>
             <ActionButton label="New game" onPress={newGame} />
-            <ActionButton label="Back to menu" onPress={() => { abandonGame(); setScreen('menu'); }} />
+            <ActionButton
+              label="Back to menu"
+              onPress={() => {
+                abandonGame();
+                setScreen('menu');
+              }}
+            />
           </View>
         </View>
+      )}
+
+      {/* Move log overlay */}
+      {logOpen && (
+        <Pressable style={styles.overlay} onPress={() => setLogOpen(false)}>
+          <View style={[styles.overlayCard, { maxHeight: '70%' }]}>
+            <Text style={styles.overlayTitle}>Move log</Text>
+            <ScrollView>
+              {log.length === 0 && <Text style={styles.logEntry}>No moves yet.</Text>}
+              {log
+                .slice()
+                .reverse()
+                .map((e, i) => (
+                  <Text key={i} style={styles.logEntry}>
+                    {e.player === humanPlayer ? 'You' : 'AI'} · {e.text}
+                  </Text>
+                ))}
+            </ScrollView>
+            <ActionButton label="Close" onPress={() => setLogOpen(false)} />
+          </View>
+        </Pressable>
       )}
 
       {/* Bank (view-only) and discover picker */}
@@ -342,9 +257,9 @@ export function GameScreen() {
         visible={discoverOpen}
         onClose={() => setDiscoverOpen(false)}
         title="Discover: choose the new star"
-        pickable={new Set(discoverMoves.map((m) => pieceKey(m.star)))}
+        pickable={new Set(d.discoverMoves.map((m) => pieceKey(m.star)))}
         onPick={(star) => {
-          const m = discoverMoves.find((x) => samePiece(x.star, star));
+          const m = d.discoverMoves.find((x) => samePiece(x.star, star));
           if (m) play(m);
         }}
       />
@@ -354,28 +269,13 @@ export function GameScreen() {
 
 // ---------------------------------------------------------------------------
 
-function ActionButton({
-  label,
-  onPress,
-  color,
-  danger,
-}: {
-  label: string;
-  onPress: () => void;
-  color?: string;
-  danger?: boolean;
-}) {
+function ActionButton({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.btn,
-        color ? { borderColor: color } : null,
-        danger ? { borderColor: theme.danger } : null,
-        pressed && { opacity: 0.6 },
-      ]}
+      style={({ pressed }) => [styles.btn, pressed && { opacity: 0.6 }]}
     >
-      <Text style={[styles.btnText, danger && { color: theme.danger }]}>{label}</Text>
+      <Text style={styles.btnText}>{label}</Text>
     </Pressable>
   );
 }
@@ -407,9 +307,9 @@ function SetupPanel({ legal, onPlay }: { legal: Move[]; onPlay: (m: Move) => voi
   };
 
   return (
-    <View style={styles.actionPanel}>
-      <View style={styles.actionHeader}>
-        <Text style={styles.actionTitle}>
+    <View style={styles.setupPanel}>
+      <View style={styles.setupHeader}>
+        <Text style={styles.setupTitle}>
           {done ? 'Confirm your homeworld' : `Pick: ${slotLabels[picks.length]}`}
         </Text>
         {picks.length > 0 && (
@@ -468,32 +368,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 14,
-    paddingBottom: 8,
+    paddingBottom: 6,
   },
   headerBtn: { color: theme.accent, fontSize: 14, fontWeight: '600' },
   headerTitle: { color: theme.text, fontSize: 14, fontWeight: '700' },
   disabled: { color: theme.textDim, opacity: 0.5 },
-  banner: {
-    marginHorizontal: 10,
-    marginBottom: 6,
-    padding: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: theme.accent,
-    backgroundColor: theme.panelHi,
+  ticker: {
+    color: theme.textDim,
+    fontSize: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 3,
+    textAlign: 'center',
   },
-  bannerText: { color: theme.text, fontWeight: '600', marginBottom: 6 },
-  sacrificeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  pipRow: { flexDirection: 'row', gap: 4 },
-  pip: { width: 10, height: 10, borderRadius: 5 },
-  actionPanel: {
-    backgroundColor: theme.panelHi,
-    borderTopWidth: 1,
-    borderColor: theme.border,
-    padding: 12,
-  },
-  actionHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  actionTitle: { color: theme.text, fontWeight: '700', fontSize: 14 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   btn: {
     borderWidth: 1,
@@ -504,18 +390,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     marginVertical: 3,
   },
-  btnText: { color: theme.text, fontSize: 13, fontWeight: '600' },
+  btnText: { color: theme.text, fontSize: 13, fontWeight: '600', textAlign: 'center' },
   hint: { color: theme.textDim, fontSize: 11, marginTop: 4 },
-  ticker: {
-    color: theme.textDim,
-    fontSize: 12,
-    paddingHorizontal: 14,
-    paddingBottom: 4,
-    textAlign: 'center',
+  setupPanel: {
+    backgroundColor: theme.panelSolid,
+    borderTopWidth: 1,
+    borderColor: theme.border,
+    padding: 12,
   },
-  logHeader: { paddingHorizontal: 14, paddingVertical: 8 },
-  logTitle: { color: theme.textDim, fontWeight: '700', fontSize: 13 },
-  logEntry: { color: theme.textDim, fontSize: 12, paddingHorizontal: 18, paddingVertical: 1 },
+  setupHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  setupTitle: { color: theme.text, fontWeight: '700', fontSize: 14 },
+  logEntry: { color: theme.textDim, fontSize: 12, paddingVertical: 2 },
   overlay: {
     position: 'absolute',
     top: 0,
