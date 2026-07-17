@@ -15,6 +15,7 @@ import { useGameStore } from '../store/gameStore';
 import { BankPanel } from './BankPanel';
 import { Pyramid } from './Pyramid';
 import { derive, moveLosesGame, sacrificeHint, Selection } from './selectors';
+import { Starfield } from './Starfield';
 import { SystemView } from './SystemView';
 import { colorNames, pieceColors, theme } from './theme';
 
@@ -120,6 +121,7 @@ export function GameScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + 6, paddingBottom: insets.bottom }]}>
+      <Starfield />
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => setScreen('menu')} hitSlop={10}>
@@ -160,6 +162,7 @@ export function GameScreen() {
             selectedShip={sel}
             moveTargets={moveTargets}
             attackTargets={attackTargets}
+            dimmed={sel !== null && sys.id !== sel.system && !moveTargets.has(sys.id)}
             interactive={humanTurn}
             onPressOwnShip={(system, ship) =>
               setSel(sel && sel.system === system && samePiece(sel.ship, ship) ? null : { system, ship })
@@ -506,7 +509,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   overlayCard: {
-    backgroundColor: theme.panel,
+    backgroundColor: theme.panelSolid,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: theme.border,

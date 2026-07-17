@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Starfield } from './Starfield';
 import { Difficulty } from '../ai/ai';
 import { useGameStore } from '../store/gameStore';
 import { theme } from './theme';
@@ -30,6 +31,7 @@ export function MenuScreen() {
         paddingBottom: insets.bottom + 28,
       }}
     >
+      <Starfield seed={3} />
       <Text style={styles.title}>Binary{'\n'}Homeworlds</Text>
       <Text style={styles.subtitle}>The Looney Pyramids space duel</Text>
 

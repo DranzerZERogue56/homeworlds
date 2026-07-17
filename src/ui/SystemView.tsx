@@ -16,6 +16,8 @@ interface Props {
   onPressEnemyShip: (system: number, ship: Piece) => void;
   onPressSystem: (system: number) => void;
   interactive: boolean;
+  /** True when a ship is selected elsewhere and this system is unreachable. */
+  dimmed?: boolean;
 }
 
 export function SystemView({
@@ -28,6 +30,7 @@ export function SystemView({
   onPressEnemyShip,
   onPressSystem,
   interactive,
+  dimmed,
 }: Props) {
   const enemy: PlayerId = humanPlayer === 0 ? 1 : 0;
   const isTarget = moveTargets.has(system.id);
@@ -44,7 +47,12 @@ export function SystemView({
     <Pressable
       onPress={() => isTarget && onPressSystem(system.id)}
       disabled={!interactive || !isTarget}
-      style={[styles.card, system.home !== undefined && styles.homeCard, isTarget && styles.target]}
+      style={[
+        styles.card,
+        system.home !== undefined && styles.homeCard,
+        isTarget && styles.target,
+        dimmed && { opacity: 0.4 },
+      ]}
     >
       <View style={styles.headerRow}>
         <Text style={[styles.name, isTarget && { color: theme.highlight }]}>
@@ -107,15 +115,15 @@ export function SystemView({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.panel,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: theme.border,
-    paddingVertical: 6,
+    paddingVertical: 8,
     paddingHorizontal: 10,
-    marginVertical: 4,
+    marginVertical: 5,
     marginHorizontal: 10,
   },
-  homeCard: { borderColor: '#3d4a75', backgroundColor: theme.panelHi },
+  homeCard: { borderColor: '#4a5a8f', backgroundColor: theme.panelHi },
   target: { borderColor: theme.highlight, borderWidth: 2 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between' },
   name: { color: theme.textDim, fontSize: 12, fontWeight: '600', marginBottom: 2 },

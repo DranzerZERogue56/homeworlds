@@ -59,7 +59,7 @@ export function BankPanel({ bank, visible, onClose, title, pickable, onPick }: P
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: '#000a', justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: theme.panel,
+    backgroundColor: theme.panelSolid,
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     padding: 18,

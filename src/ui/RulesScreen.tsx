@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGameStore } from '../store/gameStore';
+import { Starfield } from './Starfield';
 import { theme } from './theme';
 
 const SECTIONS: { title: string; body: string }[] = [
@@ -97,6 +98,7 @@ export function RulesScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + 6 }]}>
+      <Starfield seed={11} />
       <View style={styles.header}>
         <Pressable onPress={() => setScreen('menu')} hitSlop={8}>
           <Text style={styles.back}>‹ Back</Text>

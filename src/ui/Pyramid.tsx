@@ -42,7 +42,28 @@ export function Pyramid({ piece, kind, selected, highlighted, onPress, disabled 
 
   const body =
     kind === 'star' ? (
-      <View style={{ width: w, height: w, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: w * 1.5, height: w * 1.5, alignItems: 'center', justifyContent: 'center' }}>
+        {/* glow halo */}
+        <View
+          style={{
+            position: 'absolute',
+            width: w * 1.5,
+            height: w * 1.5,
+            borderRadius: (w * 1.5) / 2,
+            backgroundColor: color,
+            opacity: 0.22,
+          }}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            width: w * 1.05,
+            height: w * 1.05,
+            borderRadius: (w * 1.05) / 2,
+            backgroundColor: color,
+            opacity: 0.28,
+          }}
+        />
         <View
           style={{
             width: w * 0.72,

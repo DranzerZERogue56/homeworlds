@@ -1,9 +1,10 @@
 import { Color } from '../engine';
 
 export const theme = {
-  bg: '#0d1117',
-  panel: '#161b27',
-  panelHi: '#1f2637',
+  bg: '#060913',
+  panel: 'rgba(20, 26, 43, 0.78)',
+  panelHi: 'rgba(29, 37, 60, 0.88)',
+  panelSolid: '#141a2b',
   border: '#2c3550',
   text: '#dce3f2',
   textDim: '#8b96b3',
