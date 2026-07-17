@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   BackHandler,
   Pressable,
   ScrollView,
@@ -9,23 +10,15 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  COLORS,
-  Color,
-  Move,
-  Piece,
-  SIZES,
-  getLegalMoves,
-  pieceKey,
-  samePiece,
-} from '../engine';
+import { COLORS, Move, Piece, SIZES, getLegalMoves, pieceKey, samePiece } from '../engine';
 import { useGameStore } from '../store/gameStore';
 import { BankPanel } from './BankPanel';
 import { Pyramid } from './Pyramid';
+import { derive, moveLosesGame, sacrificeHint, Selection } from './selectors';
 import { SystemView } from './SystemView';
 import { colorNames, pieceColors, theme } from './theme';
 
-type Sel = { system: number; ship: Piece } | null;
+type Sel = Selection | null;
 
 export function GameScreen() {
   const game = useGameStore((s) => s.game);
@@ -74,43 +67,47 @@ export function GameScreen() {
 
   if (!game) return null;
 
+  // All tappable options derive from getLegalMoves via the tested selector.
+  const d = derive(legal, sel);
+  const {
+    moveTargets,
+    moveMoves,
+    attackTargets,
+    attackMoves,
+    buildMoves,
+    tradeMoves,
+    discoverMoves,
+    sacrificeMove,
+    catastropheMoves,
+    endMove,
+  } = d;
+
   const play = (move: Move) => {
+    // Guard rail: warn before a move that immediately loses the game
+    // (abandoning or sacrificing the last ship at your homeworld).
+    if (moveLosesGame(game, move, humanPlayer)) {
+      Alert.alert(
+        'This loses the game',
+        'Your homeworld would be left without your ships and destroyed. Do it anyway?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Do it',
+            style: 'destructive',
+            onPress: () => {
+              setSel(null);
+              setDiscoverOpen(false);
+              playHuman(move);
+            },
+          },
+        ]
+      );
+      return;
+    }
     setSel(null);
     setDiscoverOpen(false);
     playHuman(move);
   };
-
-  // ----- selection-derived legal options ------------------------------------
-  const selMoves = sel
-    ? legal.filter((m) => 'system' in m && m.system === sel.system)
-    : [];
-  const moveTargets = new Set<number>(
-    selMoves
-      .filter((m): m is Extract<Move, { type: 'move' }> => m.type === 'move' && samePiece(m.ship, sel!.ship))
-      .map((m) => m.to)
-  );
-  const attackMoves = selMoves.filter(
-    (m): m is Extract<Move, { type: 'attack' }> => m.type === 'attack'
-  );
-  const attackTargets = new Set(attackMoves.map((m) => pieceKey(m.target)));
-  const buildMoves = selMoves.filter(
-    (m): m is Extract<Move, { type: 'build' }> => m.type === 'build'
-  );
-  const tradeMoves = selMoves.filter(
-    (m): m is Extract<Move, { type: 'trade' }> => m.type === 'trade' && samePiece(m.ship, sel!.ship)
-  );
-  const discoverMoves = selMoves.filter(
-    (m): m is Extract<Move, { type: 'discover' }> =>
-      m.type === 'discover' && samePiece(m.ship, sel!.ship)
-  );
-  const sacrificeMove = selMoves.find(
-    (m): m is Extract<Move, { type: 'sacrifice' }> =>
-      m.type === 'sacrifice' && samePiece(m.ship, sel!.ship)
-  );
-  const catastropheMoves = legal.filter(
-    (m): m is Extract<Move, { type: 'catastrophe' }> => m.type === 'catastrophe'
-  );
-  const endMove = legal.find((m) => m.type === 'end');
 
   // ----- board ordering: enemy home, colonies, own home ----------------------
   const enemy = humanPlayer === 0 ? 1 : 0;
@@ -174,14 +171,7 @@ export function GameScreen() {
               if (m) play(m);
             }}
             onPressSystem={(to) => {
-              const m = legal.find(
-                (x) =>
-                  x.type === 'move' &&
-                  sel &&
-                  x.system === sel.system &&
-                  samePiece(x.ship, sel.ship) &&
-                  x.to === to
-              );
+              const m = moveMoves.find((x) => x.to === to);
               if (m) play(m);
             }}
           />
@@ -206,13 +196,26 @@ export function GameScreen() {
 
       {/* Status banners */}
       {humanTurn && game.phase === 'sacrifice' && game.sacrifice && (
-        <View style={styles.banner}>
-          <Text style={styles.bannerText}>
-            Sacrifice: {game.sacrifice.actionsLeft} {colorNames[game.sacrifice.color].toLowerCase()}{' '}
-            action{game.sacrifice.actionsLeft === 1 ? '' : 's'} left
-          </Text>
+        <View style={[styles.banner, { borderColor: pieceColors[game.sacrifice.color] }]}>
+          <View style={styles.sacrificeRow}>
+            <Text style={styles.bannerText}>
+              {colorNames[game.sacrifice.color]} sacrifice
+            </Text>
+            <View style={styles.pipRow}>
+              {Array.from({ length: game.sacrifice.actionsLeft }).map((_, i) => (
+                <View
+                  key={i}
+                  style={[styles.pip, { backgroundColor: pieceColors[game.sacrifice!.color] }]}
+                />
+              ))}
+            </View>
+            <Text style={styles.bannerText}>
+              {game.sacrifice.actionsLeft} action{game.sacrifice.actionsLeft === 1 ? '' : 's'} left
+            </Text>
+          </View>
+          <Text style={styles.hint}>{sacrificeHint(game.sacrifice.color)}</Text>
           {endMove && (
-            <ActionButton label="End turn" onPress={() => play(endMove)} />
+            <ActionButton label="End turn (forfeit remaining)" onPress={() => play(endMove)} />
           )}
         </View>
       )}
@@ -288,6 +291,12 @@ export function GameScreen() {
           )}
           {attackTargets.size > 0 && (
             <Text style={styles.hint}>Tap a highlighted enemy ship to capture it.</Text>
+          )}
+          {d.selectionIsDead && (
+            <Text style={[styles.hint, { color: theme.danger }]}>
+              This ship has no legal action right now — try another ship
+              {endMove ? ' or end the turn' : ''}.
+            </Text>
           )}
         </View>
       )}
@@ -460,6 +469,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.panelHi,
   },
   bannerText: { color: theme.text, fontWeight: '600', marginBottom: 6 },
+  sacrificeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  pipRow: { flexDirection: 'row', gap: 4 },
+  pip: { width: 10, height: 10, borderRadius: 5 },
   actionPanel: {
     backgroundColor: theme.panelHi,
     borderTopWidth: 1,
