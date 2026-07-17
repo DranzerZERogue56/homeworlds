@@ -1,12 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   COLORS,
   Color,
@@ -41,6 +43,28 @@ export function GameScreen() {
   const [bankOpen, setBankOpen] = useState(false);
   const [discoverOpen, setDiscoverOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const insets = useSafeAreaInsets();
+
+  // Android hardware back: close modal -> deselect -> back to menu (game persists).
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (discoverOpen) {
+        setDiscoverOpen(false);
+        return true;
+      }
+      if (bankOpen) {
+        setBankOpen(false);
+        return true;
+      }
+      if (sel) {
+        setSel(null);
+        return true;
+      }
+      setScreen('menu');
+      return true;
+    });
+    return () => sub.remove();
+  }, [discoverOpen, bankOpen, sel, setScreen]);
 
   const humanTurn = !!game && game.phase !== 'finished' && game.current === humanPlayer && !aiThinking;
   const legal = useMemo(
@@ -98,10 +122,10 @@ export function GameScreen() {
   const sysName = (id: number) => game.systems.find((s) => s.id === id)?.name ?? '?';
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { paddingTop: insets.top + 6, paddingBottom: insets.bottom }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={abandonGame} hitSlop={8}>
+        <Pressable onPress={() => setScreen('menu')} hitSlop={10}>
           <Text style={styles.headerBtn}>‹ Menu</Text>
         </Pressable>
         <Text style={styles.headerTitle}>
@@ -115,13 +139,13 @@ export function GameScreen() {
               : 'Your turn'
             : 'Opponent’s turn'}
         </Text>
-        <View style={{ flexDirection: 'row', gap: 14 }}>
-          <Pressable onPress={undo} disabled={history.length === 0 || aiThinking} hitSlop={8}>
+        <View style={{ flexDirection: 'row', gap: 18 }}>
+          <Pressable onPress={undo} disabled={history.length === 0 || aiThinking} hitSlop={10}>
             <Text style={[styles.headerBtn, (history.length === 0 || aiThinking) && styles.disabled]}>
               Undo
             </Text>
           </Pressable>
-          <Pressable onPress={() => setBankOpen(true)} hitSlop={8}>
+          <Pressable onPress={() => setBankOpen(true)} hitSlop={10}>
             <Text style={styles.headerBtn}>Bank</Text>
           </Pressable>
         </View>
@@ -415,7 +439,7 @@ function SetupPanel({ legal, onPlay }: { legal: Move[]; onPlay: (m: Move) => voi
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.bg, paddingTop: 54 },
+  root: { flex: 1, backgroundColor: theme.bg },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -441,7 +465,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: theme.border,
     padding: 12,
-    paddingBottom: 24,
   },
   actionHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   actionTitle: { color: theme.text, fontWeight: '700', fontSize: 14 },

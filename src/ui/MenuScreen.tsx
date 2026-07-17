@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Difficulty } from '../ai/ai';
 import { useGameStore } from '../store/gameStore';
 import { theme } from './theme';
@@ -18,9 +19,17 @@ export function MenuScreen() {
   const setScreen = useGameStore((s) => s.setScreen);
 
   const canResume = game !== null && game.phase !== 'finished';
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={styles.root}>
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={{
+        padding: 28,
+        paddingTop: insets.top + 36,
+        paddingBottom: insets.bottom + 28,
+      }}
+    >
       <Text style={styles.title}>Binary{'\n'}Homeworlds</Text>
       <Text style={styles.subtitle}>The Looney Pyramids space duel</Text>
 
@@ -83,12 +92,12 @@ export function MenuScreen() {
       <Pressable style={[styles.bigBtn, styles.ghostBtn]} onPress={() => setScreen('rules')}>
         <Text style={[styles.bigBtnText, { color: theme.accent }]}>How to play</Text>
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.bg, padding: 28, paddingTop: 90 },
+  root: { flex: 1, backgroundColor: theme.bg },
   title: { color: theme.text, fontSize: 40, fontWeight: '900', lineHeight: 44 },
   subtitle: { color: theme.textDim, fontSize: 14, marginTop: 6, marginBottom: 30 },
   sectionLabel: {

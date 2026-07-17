@@ -1,5 +1,6 @@
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGameStore } from '../store/gameStore';
 import { theme } from './theme';
 
@@ -84,8 +85,18 @@ const SECTIONS: { title: string; body: string }[] = [
 
 export function RulesScreen() {
   const setScreen = useGameStore((s) => s.setScreen);
+  const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setScreen('menu');
+      return true;
+    });
+    return () => sub.remove();
+  }, [setScreen]);
+
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { paddingTop: insets.top + 6 }]}>
       <View style={styles.header}>
         <Pressable onPress={() => setScreen('menu')} hitSlop={8}>
           <Text style={styles.back}>‹ Back</Text>
@@ -93,7 +104,7 @@ export function RulesScreen() {
         <Text style={styles.title}>How to play</Text>
         <View style={{ width: 50 }} />
       </View>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 40 }}>
         {SECTIONS.map((s) => (
           <View key={s.title} style={styles.section}>
             <Text style={styles.sectionTitle}>{s.title}</Text>
@@ -106,7 +117,7 @@ export function RulesScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.bg, paddingTop: 54 },
+  root: { flex: 1, backgroundColor: theme.bg },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

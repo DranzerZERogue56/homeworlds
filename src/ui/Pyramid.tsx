@@ -13,7 +13,7 @@ interface Props {
   disabled?: boolean;
 }
 
-const BASE = { 1: 18, 2: 26, 3: 34 } as const;
+const BASE = { 1: 20, 2: 28, 3: 36 } as const;
 
 /** A Looney pyramid as a plain-View triangle (no image assets). */
 export function Pyramid({ piece, kind, selected, highlighted, onPress, disabled }: Props) {
@@ -67,7 +67,7 @@ export function Pyramid({ piece, kind, selected, highlighted, onPress, disabled 
         highlighted && styles.highlighted,
         pressed && { opacity: 0.6 },
       ]}
-      hitSlop={6}
+      hitSlop={10}
     >
       {body}
     </Pressable>
@@ -76,7 +76,7 @@ export function Pyramid({ piece, kind, selected, highlighted, onPress, disabled 
 
 const styles = StyleSheet.create({
   wrap: {
-    padding: 3,
+    padding: 5,
     margin: 1,
     borderRadius: 6,
     borderWidth: 2,

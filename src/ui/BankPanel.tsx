@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Bank, COLORS, Piece, SIZES } from '../engine';
 import { Pyramid } from './Pyramid';
 import { colorNames, theme } from './theme';
@@ -16,10 +17,11 @@ interface Props {
 
 /** The bank as a 4-color x 3-size grid with remaining counts. */
 export function BankPanel({ bank, visible, onClose, title, pickable, onPick }: Props) {
+  const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + 18 }]}>
           <Text style={styles.title}>{title ?? 'Bank'}</Text>
           {COLORS.map((c) => (
             <View key={c} style={styles.row}>

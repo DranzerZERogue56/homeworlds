@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useGameStore } from './src/store/gameStore';
 import { GameScreen } from './src/ui/GameScreen';
 import { MenuScreen } from './src/ui/MenuScreen';
@@ -17,19 +18,21 @@ export default function App() {
   }, [hydrate]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.bg }}>
-      <StatusBar style="light" />
-      {!hydrated ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator color={theme.accent} size="large" />
-        </View>
-      ) : screen === 'menu' ? (
-        <MenuScreen />
-      ) : screen === 'rules' ? (
-        <RulesScreen />
-      ) : (
-        <GameScreen />
-      )}
-    </View>
+    <SafeAreaProvider>
+      <View style={{ flex: 1, backgroundColor: theme.bg }}>
+        <StatusBar style="light" />
+        {!hydrated ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator color={theme.accent} size="large" />
+          </View>
+        ) : screen === 'menu' ? (
+          <MenuScreen />
+        ) : screen === 'rules' ? (
+          <RulesScreen />
+        ) : (
+          <GameScreen />
+        )}
+      </View>
+    </SafeAreaProvider>
   );
 }
