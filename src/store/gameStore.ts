@@ -10,6 +10,7 @@ import {
 } from '../engine';
 import { Difficulty, chooseMove, personaById, randomPersona } from '../ai/ai';
 import { explainMove } from '../ai/explain';
+import { starsEarned } from '../campaign/campaign';
 import { scenarioById } from '../scenarios/scenarios';
 
 const SAVE_KEY = 'homeworlds:save:v1';
@@ -51,7 +52,7 @@ interface Snapshot {
   log: LogEntry[];
 }
 
-export type Screen = 'menu' | 'game' | 'rules' | 'settings' | 'replay' | 'academy';
+export type Screen = 'menu' | 'game' | 'rules' | 'settings' | 'replay' | 'academy' | 'campaign';
 
 interface Store {
   screen: Screen;
@@ -73,10 +74,15 @@ interface Store {
   scenarioBackup: Snapshot | null;
   /** Completed scenario ids. */
   scenarioDone: Record<string, boolean>;
+  /** Campaign ladder: personaId -> best stars earned (0-3). */
+  campaign: Record<string, number>;
+  /** Set while the current game is a campaign bout. */
+  campaignPersonaId: string | null;
 
   setScreen: (s: Screen) => void;
   startScenario: (id: string) => void;
   exitScenario: (opts?: { completed?: boolean }) => void;
+  startCampaignGame: (personaId: string) => void;
   setSettings: (s: Partial<Settings>) => void;
   newGame: () => void;
   abandonGame: () => void;
@@ -88,12 +94,33 @@ interface Store {
 
 let aiRunning = false;
 
+/** When a campaign bout finishes, bank the best star count (idempotent). */
+function maybeRecordCampaign(
+  get: () => Store,
+  set: (partial: Partial<Store>) => void
+): void {
+  const { game, humanPlayer, campaignPersonaId, campaign } = get();
+  if (!game || game.phase !== 'finished' || !campaignPersonaId) return;
+  const stars = starsEarned(game, humanPlayer);
+  const best = Math.max(campaign[campaignPersonaId] ?? 0, stars);
+  if (best !== (campaign[campaignPersonaId] ?? 0)) {
+    set({ campaign: { ...campaign, [campaignPersonaId]: best } });
+    void persist(get);
+  }
+}
+
 async function persist(get: () => Store): Promise<void> {
-  const { game, log, history, settings, humanPlayer, personaId, aiLastSystems, scenarioDone } = get();
+  const {
+    game, log, history, settings, humanPlayer, personaId, aiLastSystems,
+    scenarioDone, campaign, campaignPersonaId,
+  } = get();
   try {
     await AsyncStorage.setItem(
       SAVE_KEY,
-      JSON.stringify({ game, log, history, settings, humanPlayer, personaId, aiLastSystems, scenarioDone })
+      JSON.stringify({
+        game, log, history, settings, humanPlayer, personaId, aiLastSystems,
+        scenarioDone, campaign, campaignPersonaId,
+      })
     );
   } catch {
     // Persistence is best-effort; never crash gameplay over it.
@@ -122,7 +149,10 @@ async function runAI(
       await new Promise((r) => setTimeout(r, 250));
       const stale = get().game;
       if (stale !== game) continue; // state changed under us (new game/undo)
-      const move = await chooseMove(game, settings.difficulty, personaById(get().personaId));
+      const activePersona = personaById(get().personaId);
+      const difficulty =
+        (get().campaignPersonaId ? activePersona?.difficulty : null) ?? settings.difficulty;
+      const move = await chooseMove(game, difficulty, activePersona);
       const current = get().game;
       if (current !== game) continue;
       const next = applyMove(game, move);
@@ -148,6 +178,7 @@ async function runAI(
   } finally {
     aiRunning = false;
     set({ aiThinking: false });
+    maybeRecordCampaign(get, set);
   }
 }
 
@@ -165,8 +196,28 @@ export const useGameStore = create<Store>((set, get) => ({
   scenarioId: null,
   scenarioBackup: null,
   scenarioDone: {},
+  campaign: {},
+  campaignPersonaId: null,
 
   setScreen: (screen) => set({ screen }),
+
+  startCampaignGame: (personaId) => {
+    const { settings } = get();
+    set({
+      game: initialState(),
+      log: [],
+      history: [],
+      humanPlayer: settings.humanFirst ? 0 : 1,
+      personaId,
+      campaignPersonaId: personaId,
+      screen: 'game',
+      aiLastSystems: [],
+      scenarioId: null,
+      scenarioBackup: null,
+    });
+    void persist(get);
+    void runAI(get, set);
+  },
 
   startScenario: (id) => {
     const sc = scenarioById(id);
@@ -219,6 +270,7 @@ export const useGameStore = create<Store>((set, get) => ({
       aiLastSystems: [],
       scenarioId: null,
       scenarioBackup: null,
+      campaignPersonaId: null,
     });
     void persist(get);
     void runAI(get, set);
@@ -233,6 +285,7 @@ export const useGameStore = create<Store>((set, get) => ({
       aiLastSystems: [],
       scenarioId: null,
       scenarioBackup: null,
+      campaignPersonaId: null,
     });
     void persist(get);
   },
@@ -252,6 +305,7 @@ export const useGameStore = create<Store>((set, get) => ({
       history: isTurnStart ? [...history, { game, log }] : history,
     });
     if (!get().scenarioId) {
+      maybeRecordCampaign(get, set);
       void persist(get);
       void runAI(get, set);
     }
@@ -283,6 +337,8 @@ export const useGameStore = create<Store>((set, get) => ({
           personaId: data.personaId ?? null,
           aiLastSystems: data.aiLastSystems ?? [],
           scenarioDone: data.scenarioDone ?? {},
+          campaign: data.campaign ?? {},
+          campaignPersonaId: data.campaignPersonaId ?? null,
           screen: data.game && data.game.phase !== 'finished' ? 'game' : 'menu',
         });
       }

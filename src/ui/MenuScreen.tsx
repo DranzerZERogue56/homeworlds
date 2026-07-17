@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Starfield } from './Starfield';
 import { Difficulty, personasFor } from '../ai/ai';
+import { MAX_STARS, totalStars } from '../campaign/campaign';
 import { useGameStore } from '../store/gameStore';
 import { theme } from './theme';
 
@@ -19,6 +20,7 @@ export function MenuScreen() {
   const setSettings = useGameStore((s) => s.setSettings);
   const newGame = useGameStore((s) => s.newGame);
   const game = useGameStore((s) => s.game);
+  const campaign = useGameStore((s) => s.campaign);
   const setScreen = useGameStore((s) => s.setScreen);
 
   const canResume = game !== null && game.phase !== 'finished';
@@ -109,6 +111,11 @@ export function MenuScreen() {
           <Text style={[styles.bigBtnText, { color: theme.accent }]}>Replay last game</Text>
         </Pressable>
       )}
+      <Pressable style={[styles.bigBtn, styles.ghostBtn]} onPress={() => setScreen('campaign')}>
+        <Text style={[styles.bigBtnText, { color: theme.accent }]}>
+          Campaign  ★{totalStars(campaign)}/{MAX_STARS}
+        </Text>
+      </Pressable>
       <Pressable style={[styles.bigBtn, styles.ghostBtn]} onPress={() => setScreen('academy')}>
         <Text style={[styles.bigBtnText, { color: theme.accent }]}>Fleet Academy</Text>
       </Pressable>

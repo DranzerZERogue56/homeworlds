@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { advantage, personaById } from '../ai/ai';
 import { COLORS, Move, Piece, SIZES, getLegalMoves, pieceKey, samePiece } from '../engine';
+import { starsEarned, LADDER, unlockedIndex } from '../campaign/campaign';
 import { scenarioById } from '../scenarios/scenarios';
 import { useGameStore } from '../store/gameStore';
 import { ActionSheet } from './ActionSheet';
@@ -37,6 +38,9 @@ export function GameScreen() {
   const settings = useGameStore((s) => s.settings);
   const personaId = useGameStore((s) => s.personaId);
   const scenarioId = useGameStore((s) => s.scenarioId);
+  const campaign = useGameStore((s) => s.campaign);
+  const campaignPersonaId = useGameStore((s) => s.campaignPersonaId);
+  const startCampaignGame = useGameStore((s) => s.startCampaignGame);
   const startScenario = useGameStore((s) => s.startScenario);
   const exitScenario = useGameStore((s) => s.exitScenario);
   const playHuman = useGameStore((s) => s.playHuman);
@@ -296,8 +300,35 @@ export function GameScreen() {
                   : `${persona.name} claims your homeworld.`}
               </Text>
             )}
+            {campaignPersonaId && (
+              <Text style={styles.overlayStars}>
+                {[1, 2, 3]
+                  .map((i) => (i <= starsEarned(game, humanPlayer) ? '★' : '☆'))
+                  .join(' ')}
+              </Text>
+            )}
+            {campaignPersonaId &&
+              game.winner === humanPlayer &&
+              (() => {
+                const next = LADDER[unlockedIndex(campaign)];
+                return next ? (
+                  <ActionButton
+                    label={`Next commander: ${next.name}`}
+                    onPress={() => startCampaignGame(next.id)}
+                  />
+                ) : null;
+              })()}
+            {campaignPersonaId && (
+              <ActionButton
+                label={game.winner === humanPlayer ? 'Rematch for stars' : 'Rematch'}
+                onPress={() => startCampaignGame(campaignPersonaId)}
+              />
+            )}
+            {campaignPersonaId && (
+              <ActionButton label="Back to campaign" onPress={() => setScreen('campaign')} />
+            )}
             <ActionButton label="Watch replay" onPress={() => setScreen('replay')} />
-            <ActionButton label="New game" onPress={newGame} />
+            {!campaignPersonaId && <ActionButton label="New game" onPress={newGame} />}
             <ActionButton
               label="Back to menu"
               onPress={() => {
@@ -555,5 +586,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     marginBottom: 10,
+  },
+  overlayStars: {
+    color: theme.highlight,
+    fontSize: 22,
+    textAlign: 'center',
+    marginBottom: 10,
+    letterSpacing: 4,
   },
 });

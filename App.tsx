@@ -9,6 +9,7 @@ import { RulesScreen } from './src/ui/RulesScreen';
 import { SettingsScreen } from './src/ui/SettingsScreen';
 import { ReplayScreen } from './src/ui/ReplayScreen';
 import { AcademyScreen } from './src/ui/AcademyScreen';
+import { CampaignScreen } from './src/ui/CampaignScreen';
 import { theme } from './src/ui/theme';
 
 export default function App() {
@@ -30,6 +31,8 @@ export default function App() {
           </View>
         ) : screen === 'menu' ? (
           <MenuScreen />
+        ) : screen === 'campaign' ? (
+          <CampaignScreen />
         ) : screen === 'academy' ? (
           <AcademyScreen />
         ) : screen === 'replay' ? (
