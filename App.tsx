@@ -1,0 +1,35 @@
+import { StatusBar } from 'expo-status-bar';
+import React, { useEffect } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+import { useGameStore } from './src/store/gameStore';
+import { GameScreen } from './src/ui/GameScreen';
+import { MenuScreen } from './src/ui/MenuScreen';
+import { RulesScreen } from './src/ui/RulesScreen';
+import { theme } from './src/ui/theme';
+
+export default function App() {
+  const screen = useGameStore((s) => s.screen);
+  const hydrated = useGameStore((s) => s.hydrated);
+  const hydrate = useGameStore((s) => s.hydrate);
+
+  useEffect(() => {
+    void hydrate();
+  }, [hydrate]);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
+      <StatusBar style="light" />
+      {!hydrated ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator color={theme.accent} size="large" />
+        </View>
+      ) : screen === 'menu' ? (
+        <MenuScreen />
+      ) : screen === 'rules' ? (
+        <RulesScreen />
+      ) : (
+        <GameScreen />
+      )}
+    </View>
+  );
+}
