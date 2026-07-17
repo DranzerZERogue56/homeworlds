@@ -8,7 +8,7 @@ import {
   initialState,
   moveToNotation,
 } from '../engine';
-import { Difficulty, chooseMove } from '../ai/ai';
+import { Difficulty, chooseMove, personaById, randomPersona } from '../ai/ai';
 
 const SAVE_KEY = 'homeworlds:save:v1';
 
@@ -38,6 +38,8 @@ interface Store {
   /** Snapshots taken right before each human move-of-turn, for undo. */
   history: Snapshot[];
   humanPlayer: PlayerId;
+  /** Persona id of this game's AI commander (picked at newGame). */
+  personaId: string | null;
   aiThinking: boolean;
   hydrated: boolean;
   /** Systems the AI touched on its last turn (for the "what changed" highlight). */
@@ -56,11 +58,11 @@ interface Store {
 let aiRunning = false;
 
 async function persist(get: () => Store): Promise<void> {
-  const { game, log, history, settings, humanPlayer, aiLastSystems } = get();
+  const { game, log, history, settings, humanPlayer, personaId, aiLastSystems } = get();
   try {
     await AsyncStorage.setItem(
       SAVE_KEY,
-      JSON.stringify({ game, log, history, settings, humanPlayer, aiLastSystems })
+      JSON.stringify({ game, log, history, settings, humanPlayer, personaId, aiLastSystems })
     );
   } catch {
     // Persistence is best-effort; never crash gameplay over it.
@@ -89,7 +91,7 @@ async function runAI(
       await new Promise((r) => setTimeout(r, 250));
       const stale = get().game;
       if (stale !== game) continue; // state changed under us (new game/undo)
-      const move = await chooseMove(game, settings.difficulty);
+      const move = await chooseMove(game, settings.difficulty, personaById(get().personaId));
       const current = get().game;
       if (current !== game) continue;
       const next = applyMove(game, move);
@@ -119,6 +121,7 @@ export const useGameStore = create<Store>((set, get) => ({
   log: [],
   history: [],
   humanPlayer: 0,
+  personaId: null,
   aiThinking: false,
   hydrated: false,
   aiLastSystems: [],
@@ -137,6 +140,7 @@ export const useGameStore = create<Store>((set, get) => ({
       log: [],
       history: [],
       humanPlayer: settings.humanFirst ? 0 : 1,
+      personaId: randomPersona(settings.difficulty).id,
       screen: 'game',
       aiLastSystems: [],
     });
@@ -190,6 +194,7 @@ export const useGameStore = create<Store>((set, get) => ({
           log: data.log ?? [],
           history: data.history ?? [],
           humanPlayer: data.humanPlayer ?? 0,
+          personaId: data.personaId ?? null,
           aiLastSystems: data.aiLastSystems ?? [],
           screen: data.game && data.game.phase !== 'finished' ? 'game' : 'menu',
         });

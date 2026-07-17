@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { personaById } from '../ai/ai';
 import { COLORS, Move, Piece, SIZES, getLegalMoves, pieceKey, samePiece } from '../engine';
 import { useGameStore } from '../store/gameStore';
 import { ActionSheet } from './ActionSheet';
@@ -31,6 +32,7 @@ export function GameScreen() {
   const log = useGameStore((s) => s.log);
   const aiLastSystems = useGameStore((s) => s.aiLastSystems);
   const settings = useGameStore((s) => s.settings);
+  const personaId = useGameStore((s) => s.personaId);
   const playHuman = useGameStore((s) => s.playHuman);
   const undo = useGameStore((s) => s.undo);
   const abandonGame = useGameStore((s) => s.abandonGame);
@@ -112,6 +114,9 @@ export function GameScreen() {
   };
 
   const sysName = (id: number) => game.systems.find((s) => s.id === id)?.name ?? '?';
+  const persona = personaById(personaId);
+  const rank = settings.difficulty === 'lessEasy' ? 'less easy' : settings.difficulty;
+  const opponentLabel = persona ? `${persona.name} (${rank})` : `Opponent (${rank})`;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + 6, paddingBottom: insets.bottom }]}>
@@ -149,7 +154,7 @@ export function GameScreen() {
         game={game}
         humanTurn={humanTurn}
         aiThinking={aiThinking}
-        difficulty={settings.difficulty}
+        opponentLabel={opponentLabel}
         hasSelection={sel !== null}
         catastropheMoves={humanTurn ? d.catastropheMoves : []}
         endMove={humanTurn ? d.endMove : undefined}
@@ -217,6 +222,13 @@ export function GameScreen() {
                 ? 'You win! 🎉'
                 : 'You lose'}
             </Text>
+            {persona && (
+              <Text style={styles.overlaySub}>
+                {game.winner === humanPlayer
+                  ? `${persona.name} concedes the duel.`
+                  : `${persona.name} claims your homeworld.`}
+              </Text>
+            )}
             <ActionButton label="New game" onPress={newGame} />
             <ActionButton
               label="Back to menu"
@@ -425,6 +437,12 @@ const styles = StyleSheet.create({
     color: theme.text,
     fontSize: 22,
     fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  overlaySub: {
+    color: theme.textDim,
+    fontSize: 13,
     textAlign: 'center',
     marginBottom: 10,
   },

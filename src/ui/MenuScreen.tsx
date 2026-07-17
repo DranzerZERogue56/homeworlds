@@ -2,14 +2,16 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Starfield } from './Starfield';
-import { Difficulty } from '../ai/ai';
+import { Difficulty, personasFor } from '../ai/ai';
 import { useGameStore } from '../store/gameStore';
 import { theme } from './theme';
 
 const DIFFICULTIES: { key: Difficulty; label: string; hint: string }[] = [
   { key: 'easy', label: 'Easy', hint: 'Plays loosely — good for learning' },
+  { key: 'lessEasy', label: 'Less easy', hint: 'Focused, but only one move at a time' },
   { key: 'medium', label: 'Medium', hint: 'Looks a move ahead' },
   { key: 'hard', label: 'Hard', hint: 'Searches deeper, punishes mistakes' },
+  { key: 'masterful', label: 'Masterful', hint: 'Deep search — bring your best game' },
 ];
 
 export function MenuScreen() {
@@ -57,6 +59,16 @@ export function MenuScreen() {
       <Text style={styles.hint}>
         {DIFFICULTIES.find((d) => d.key === settings.difficulty)?.hint}
       </Text>
+      <View style={styles.personaBox}>
+        <Text style={styles.personaHeader}>Commanders of this rank (one is chosen at random):</Text>
+        {personasFor(settings.difficulty).map((p) => (
+          <Text key={p.id} style={styles.personaLine}>
+            <Text style={{ color: theme.text, fontWeight: '700' }}>{p.name}</Text>
+            {'  —  '}
+            {p.blurb}
+          </Text>
+        ))}
+      </View>
 
       <Text style={styles.sectionLabel}>First move</Text>
       <View style={styles.optionsRow}>
@@ -111,9 +123,10 @@ const styles = StyleSheet.create({
     marginTop: 18,
     marginBottom: 8,
   },
-  optionsRow: { flexDirection: 'row', gap: 8 },
+  optionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   option: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '30%',
     borderWidth: 1,
     borderColor: theme.border,
     backgroundColor: theme.panel,
@@ -125,6 +138,24 @@ const styles = StyleSheet.create({
   optionText: { color: theme.textDim, fontWeight: '600' },
   optionTextActive: { color: theme.text },
   hint: { color: theme.textDim, fontSize: 12, marginTop: 6 },
+  personaBox: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.panel,
+    borderRadius: 12,
+    padding: 12,
+    gap: 4,
+  },
+  personaHeader: {
+    color: theme.textDim,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  personaLine: { color: theme.textDim, fontSize: 12 },
   bigBtn: {
     backgroundColor: theme.accent,
     borderRadius: 12,

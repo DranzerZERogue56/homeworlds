@@ -8,7 +8,8 @@ interface Props {
   game: GameState;
   humanTurn: boolean;
   aiThinking: boolean;
-  difficulty: string;
+  /** "Warlord Krayt · Medium" — the AI commander and rank. */
+  opponentLabel: string;
   hasSelection: boolean;
   catastropheMoves: Extract<Move, { type: 'catastrophe' }>[];
   endMove: Move | undefined;
@@ -26,7 +27,7 @@ export function TurnGuide({
   game,
   humanTurn,
   aiThinking,
-  difficulty,
+  opponentLabel,
   hasSelection,
   catastropheMoves,
   endMove,
@@ -38,7 +39,7 @@ export function TurnGuide({
   if (aiThinking || !humanTurn) {
     return (
       <View style={styles.strip}>
-        <Text style={styles.text}>Opponent is thinking… ({difficulty})</Text>
+        <Text style={styles.text}>{opponentLabel} is thinking…</Text>
       </View>
     );
   }

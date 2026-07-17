@@ -11,9 +11,76 @@ import {
   otherPlayer,
 } from '../engine';
 
-export type Difficulty = 'easy' | 'medium' | 'hard';
+export type Difficulty = 'easy' | 'lessEasy' | 'medium' | 'hard' | 'masterful';
 
 const WIN = 1_000_000;
+
+// ---------------------------------------------------------------------------
+// Personalities
+// ---------------------------------------------------------------------------
+
+/** Multipliers on evaluation terms; 1 everywhere = the balanced baseline. */
+export interface PersonaWeights {
+  /** Hurting the enemy: their material, and my invasion force at their home. */
+  aggression: number;
+  /** Keeping my own homeworld garrisoned and healthy. */
+  defense: number;
+  /** Growing my own fleet's material. */
+  material: number;
+  /** Fear of catastrophe exposure (lower = reckless). */
+  caution: number;
+}
+
+export interface Persona {
+  id: string;
+  name: string;
+  /** Short flavor line shown in the menu / thinking banner. */
+  blurb: string;
+  difficulty: Difficulty;
+  weights: PersonaWeights;
+  /** Extra move-choice noise on top of the tier's base (greedy tiers only). */
+  noise?: number;
+}
+
+const W = (
+  aggression: number,
+  defense: number,
+  material: number,
+  caution: number
+): PersonaWeights => ({ aggression, defense, material, caution });
+
+export const PERSONAS: Persona[] = [
+  // easy — loose, distractible
+  { id: 'bloop', name: 'Ensign Bloop', blurb: 'Enthusiastic, easily distracted', difficulty: 'easy', weights: W(0.8, 0.8, 1.2, 0.6), noise: 20 },
+  { id: 'mira', name: 'Cadet Mira', blurb: 'Timid — hides at home', difficulty: 'easy', weights: W(0.5, 1.6, 1.0, 1.3), noise: 10 },
+  // lessEasy — starting to focus
+  { id: 'jax', name: 'Scrapper Jax', blurb: 'Picks fights early', difficulty: 'lessEasy', weights: W(1.6, 0.7, 0.9, 0.7) },
+  { id: 'yun', name: 'Prospector Yun', blurb: 'Hoards ships, avoids trouble', difficulty: 'lessEasy', weights: W(0.7, 1.1, 1.6, 1.2) },
+  // medium
+  { id: 'sorrel', name: 'Captain Sorrel', blurb: 'By-the-book tactician', difficulty: 'medium', weights: W(1.0, 1.0, 1.0, 1.0) },
+  { id: 'krayt', name: 'Warlord Krayt', blurb: 'Reckless raider', difficulty: 'medium', weights: W(1.7, 0.7, 0.9, 0.5) },
+  // hard
+  { id: 'vex', name: 'Admiral Vex', blurb: 'Relentless pressure', difficulty: 'hard', weights: W(1.4, 0.9, 1.0, 0.9) },
+  { id: 'ilm', name: 'Strategos Ilm', blurb: 'Patient — waits for your mistake', difficulty: 'hard', weights: W(0.9, 1.4, 1.1, 1.2) },
+  // masterful
+  { id: 'archivist', name: 'The Archivist', blurb: 'Has read every recorded game', difficulty: 'masterful', weights: W(1.0, 1.0, 1.0, 1.0) },
+  { id: 'nyx', name: 'Empress Nyx', blurb: 'Ends duels quickly and cruelly', difficulty: 'masterful', weights: W(1.5, 0.8, 1.0, 0.8) },
+];
+
+export function personasFor(difficulty: Difficulty): Persona[] {
+  return PERSONAS.filter((p) => p.difficulty === difficulty);
+}
+
+export function personaById(id: string | null | undefined): Persona | undefined {
+  return PERSONAS.find((p) => p.id === id);
+}
+
+export function randomPersona(difficulty: Difficulty): Persona {
+  const pool = personasFor(difficulty);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+const BALANCED: PersonaWeights = W(1, 1, 1, 1);
 
 // ---------------------------------------------------------------------------
 // Evaluation
@@ -31,7 +98,7 @@ function colorsAt(sys: System, player: PlayerId): Set<string> {
 }
 
 /** Static evaluation from `me`'s perspective. Higher is better for `me`. */
-export function evaluate(state: GameState, me: PlayerId): number {
+export function evaluate(state: GameState, me: PlayerId, w: PersonaWeights = BALANCED): number {
   if (state.winner !== null) {
     if (state.winner === 'draw') return 0;
     return state.winner === me ? WIN : -WIN;
@@ -44,8 +111,8 @@ export function evaluate(state: GameState, me: PlayerId): number {
   const yourHome = homeworld(state, you);
 
   for (const sys of state.systems) {
-    for (const p of sys.ships[me]) score += 10 * shipValue(p);
-    for (const p of sys.ships[you]) score -= 10 * shipValue(p);
+    for (const p of sys.ships[me]) score += w.material * 10 * shipValue(p);
+    for (const p of sys.ships[you]) score -= w.aggression * 10 * shipValue(p);
 
     // Catastrophe exposure: 3+ of one color where I have pieces is fragile.
     for (const c of COLORS) {
@@ -54,25 +121,26 @@ export function evaluate(state: GameState, me: PlayerId): number {
       for (const p of sys.stars) if (p.color === c) total++;
       for (const p of sys.ships[me]) if (p.color === c) { total++; mine++; }
       for (const p of sys.ships[you]) if (p.color === c) total++;
-      if (total >= 3 && mine > 0) score -= 15 * mine;
-      if (sys.home === me && total >= 3 && sys.stars.some((s) => s.color === c)) score -= 40;
+      if (total >= 3 && mine > 0) score -= w.caution * 15 * mine;
+      if (sys.home === me && total >= 3 && sys.stars.some((s) => s.color === c))
+        score -= w.caution * 40;
     }
   }
 
   // Homeworld safety.
   if (myHome) {
     const defenders = myHome.ships[me];
-    score += 25 * Math.min(defenders.length, 3);
-    score += 20 * Math.max(0, ...defenders.map((p) => p.size));
-    for (const p of myHome.ships[you]) score -= 60 * p.size; // invaders are scary
-    score += 10 * myHome.stars.length;
+    score += w.defense * 25 * Math.min(defenders.length, 3);
+    score += w.defense * 20 * Math.max(0, ...defenders.map((p) => p.size));
+    for (const p of myHome.ships[you]) score -= w.defense * 60 * p.size; // invaders are scary
+    score += w.defense * 10 * myHome.stars.length;
     score += 5 * colorsAt(myHome, me).size;
   }
   if (yourHome) {
     const defenders = yourHome.ships[you];
-    score -= 25 * Math.min(defenders.length, 3);
-    for (const p of yourHome.ships[me]) score += 55 * p.size; // my invasion force
-    score -= 10 * yourHome.stars.length;
+    score -= w.aggression * 25 * Math.min(defenders.length, 3);
+    for (const p of yourHome.ships[me]) score += w.aggression * 55 * p.size; // my invasion force
+    score -= w.aggression * 10 * yourHome.stars.length;
   }
 
   return score;
@@ -143,6 +211,7 @@ interface SearchCtx {
   deadline: number;
   maxBranch: number;
   nodes: number;
+  weights: PersonaWeights;
 }
 
 function orderedMoves(state: GameState, ctx: SearchCtx): Move[] {
@@ -161,11 +230,11 @@ function alphabeta(
 ): number {
   ctx.nodes++;
   if (state.winner !== null || depth === 0 || Date.now() > ctx.deadline) {
-    return evaluate(state, ctx.me);
+    return evaluate(state, ctx.me, ctx.weights);
   }
   const maximizing = state.current === ctx.me;
   const moves = orderedMoves(state, ctx);
-  if (moves.length === 0) return evaluate(state, ctx.me);
+  if (moves.length === 0) return evaluate(state, ctx.me, ctx.weights);
 
   let best = maximizing ? -Infinity : Infinity;
   for (const move of moves) {
@@ -196,19 +265,44 @@ const yieldToUI = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 // Public API
 // ---------------------------------------------------------------------------
 
+interface TierConfig {
+  /** Greedy tiers pick the best one-ply move with noise; search tiers run alpha-beta. */
+  kind: 'greedy' | 'search';
+  /** Greedy: random noise amplitude; more noise = sloppier play. */
+  noise?: number;
+  /** Greedy: how much the one-ply evaluation counts. */
+  evalWeight?: number;
+  depth?: number;
+  maxBranch?: number;
+  timeMs?: number;
+}
+
+const TIERS: Record<Difficulty, TierConfig> = {
+  easy: { kind: 'greedy', noise: 55, evalWeight: 0.15 },
+  lessEasy: { kind: 'greedy', noise: 25, evalWeight: 0.35 },
+  medium: { kind: 'search', depth: 2, maxBranch: 16, timeMs: 1500 },
+  hard: { kind: 'search', depth: 3, maxBranch: 26, timeMs: 2000 },
+  masterful: { kind: 'search', depth: 4, maxBranch: 20, timeMs: 2600 },
+};
+
 /**
  * Choose a move for the current player using only the public engine API.
  * Async and chunked (yields between root moves) so the UI thread stays live;
- * total thinking time is capped (~1.5s on medium/hard).
+ * search tiers are time-capped (1.5–2.6s by difficulty). An optional persona
+ * skews the evaluation (aggression/defense/material/caution) so opponents of
+ * the same rank feel different.
  */
 export async function chooseMove(
   state: GameState,
-  difficulty: Difficulty
+  difficulty: Difficulty,
+  persona?: Persona
 ): Promise<Move> {
   const legal = getLegalMoves(state);
   if (legal.length === 0) throw new Error('no legal moves');
   if (legal.length === 1) return legal[0];
   const me = state.current;
+  const tier = TIERS[difficulty] ?? TIERS.easy;
+  const weights = persona?.weights ?? BALANCED;
 
   if (state.phase === 'setup') {
     const setups = legal as Extract<Move, { type: 'setup' }>[];
@@ -224,15 +318,16 @@ export async function chooseMove(
     return best;
   }
 
-  if (difficulty === 'easy') {
+  if (tier.kind === 'greedy') {
     // Light heuristics: one-ply greedy with noise, never pick instant self-harm.
+    const noise = (tier.noise ?? 55) + (persona?.noise ?? 0);
     let best = legal[0];
     let bestScore = -Infinity;
     for (const move of legal) {
-      let s = Math.random() * 60;
+      let s = Math.random() * noise;
       try {
         const after = applyMove(state, move);
-        s += evaluate(after, me) * 0.15;
+        s += evaluate(after, me, weights) * (tier.evalWeight ?? 0.15);
         if (after.winner === me) s += WIN;
         if (after.winner === otherPlayer(me)) s -= WIN;
       } catch {
@@ -248,11 +343,12 @@ export async function chooseMove(
 
   const ctx: SearchCtx = {
     me,
-    deadline: Date.now() + 1500,
-    maxBranch: difficulty === 'hard' ? 24 : 14,
+    deadline: Date.now() + (tier.timeMs ?? 1500),
+    maxBranch: tier.maxBranch ?? 16,
     nodes: 0,
+    weights,
   };
-  const depth = difficulty === 'hard' ? 3 : 2;
+  const depth = tier.depth ?? 2;
 
   const roots = orderedMoves(state, ctx);
   let best = roots[0];

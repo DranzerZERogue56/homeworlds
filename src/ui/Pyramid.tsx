@@ -62,34 +62,46 @@ export function Pyramid({ piece, kind, selected, highlighted, onPress, disabled,
           borderBottomColor: color,
         };
 
+  // Stars: the core diamond grows steeply with size AND gains one orbit ring
+  // per size step (1 = bare, 2 = one ring, 3 = two rings) so sizes are
+  // unmistakable even at map scale.
+  const starCore = Math.round(w * { 1: 0.55, 2: 0.75, 3: 0.95 }[piece.size]);
+  const starBox = Math.round(w * 1.7);
+  const ring = (d: number, opacity: number, key: string) => (
+    <View
+      key={key}
+      style={{
+        position: 'absolute',
+        width: d,
+        height: d,
+        borderRadius: d / 2,
+        borderWidth: 1.5,
+        borderColor: color,
+        opacity,
+      }}
+    />
+  );
+
   const body =
     kind === 'star' ? (
-      <View style={{ width: w * 1.5, height: w * 1.5, alignItems: 'center', justifyContent: 'center' }}>
-        {/* glow halo */}
+      <View style={{ width: starBox, height: starBox, alignItems: 'center', justifyContent: 'center' }}>
+        {/* glow halo scales with size */}
         <View
           style={{
             position: 'absolute',
-            width: w * 1.5,
-            height: w * 1.5,
-            borderRadius: (w * 1.5) / 2,
+            width: starCore * 2,
+            height: starCore * 2,
+            borderRadius: starCore,
             backgroundColor: color,
-            opacity: 0.22,
+            opacity: 0.18 + piece.size * 0.04,
           }}
         />
+        {piece.size >= 2 && ring(Math.round(starCore * 1.7), 0.75, 'r1')}
+        {piece.size >= 3 && ring(Math.round(starCore * 2.3), 0.45, 'r2')}
         <View
           style={{
-            position: 'absolute',
-            width: w * 1.05,
-            height: w * 1.05,
-            borderRadius: (w * 1.05) / 2,
-            backgroundColor: color,
-            opacity: 0.28,
-          }}
-        />
-        <View
-          style={{
-            width: w * 0.72,
-            height: w * 0.72,
+            width: starCore,
+            height: starCore,
             backgroundColor: color,
             transform: [{ rotate: '45deg' }],
             borderRadius: 3,
