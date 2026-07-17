@@ -31,9 +31,22 @@ npx tsc --noEmit   # typecheck
   whole. The AI never touches engine internals.
 - `src/store/` — Zustand store; game, log, undo history, and settings persist
   to AsyncStorage so a closed app resumes where it left off.
-- `src/ui/` — dark-themed portrait UI. Pyramids are plain-View triangles
-  (stars are diamonds); every tappable target is derived from `getLegalMoves`,
-  so no illegal move can be offered.
+- `src/ui/` — space-themed portrait UI over a procedural starfield (zero
+  assets). Pyramids are plain-View triangles (stars are glowing diamonds);
+  every tappable target is derived from `getLegalMoves` through the pure,
+  unit-tested `selectors.ts` module, so no illegal move can be offered.
+  Safe-area aware (Android edge-to-edge) with hardware-back handling.
+
+## Sideload APK
+
+Releases on GitHub carry a debug-keystore-signed arm64 APK
+(Proguard + resource shrinking enabled). To rebuild locally:
+
+```bash
+npx expo prebuild --platform android
+cd android && ANDROID_HOME=~/Android/Sdk ANDROID_SDK_ROOT=~/Android/Sdk \
+  ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+```
 
 ## Rules notes (deliberate choices)
 
