@@ -9,6 +9,7 @@ import {
   moveToNotation,
 } from '../engine';
 import { Difficulty, chooseMove, personaById, randomPersona } from '../ai/ai';
+import { explainMove } from '../ai/explain';
 
 const SAVE_KEY = 'homeworlds:save:v1';
 
@@ -16,6 +17,10 @@ export interface LogEntry {
   player: PlayerId;
   turn: number;
   text: string;
+  /** The structured move, for replays. Absent only in pre-1.5 saves. */
+  move?: Move;
+  /** Plain-English description (AI moves), shown in the ticker. */
+  explain?: string;
 }
 
 export interface Settings {
@@ -45,7 +50,7 @@ interface Snapshot {
   log: LogEntry[];
 }
 
-export type Screen = 'menu' | 'game' | 'rules' | 'settings';
+export type Screen = 'menu' | 'game' | 'rules' | 'settings' | 'replay';
 
 interface Store {
   screen: Screen;
@@ -119,7 +124,13 @@ async function runAI(
         game: next,
         log: [
           ...log,
-          { player: game.current, turn: game.turn, text: moveToNotation(game, move) },
+          {
+            player: game.current,
+            turn: game.turn,
+            text: moveToNotation(game, move),
+            move,
+            explain: explainMove(game, move, humanPlayer),
+          },
         ],
         aiLastSystems: [...new Set(touched)],
       });
@@ -180,7 +191,7 @@ export const useGameStore = create<Store>((set, get) => ({
       game: next,
       log: [
         ...log,
-        { player: game.current, turn: game.turn, text: moveToNotation(game, move) },
+        { player: game.current, turn: game.turn, text: moveToNotation(game, move), move },
       ],
       history: isTurnStart ? [...history, { game, log }] : history,
     });

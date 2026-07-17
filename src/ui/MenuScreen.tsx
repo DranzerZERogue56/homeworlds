@@ -22,6 +22,7 @@ export function MenuScreen() {
   const setScreen = useGameStore((s) => s.setScreen);
 
   const canResume = game !== null && game.phase !== 'finished';
+  const canReplay = game !== null && game.phase === 'finished';
   const insets = useSafeAreaInsets();
 
   return (
@@ -103,6 +104,11 @@ export function MenuScreen() {
       <Pressable style={styles.bigBtn} onPress={newGame}>
         <Text style={styles.bigBtnText}>{canResume ? 'New game' : 'Start game'}</Text>
       </Pressable>
+      {canReplay && (
+        <Pressable style={[styles.bigBtn, styles.ghostBtn]} onPress={() => setScreen('replay')}>
+          <Text style={[styles.bigBtnText, { color: theme.accent }]}>Replay last game</Text>
+        </Pressable>
+      )}
       <Pressable style={[styles.bigBtn, styles.ghostBtn]} onPress={() => setScreen('rules')}>
         <Text style={[styles.bigBtnText, { color: theme.accent }]}>How to play</Text>
       </Pressable>

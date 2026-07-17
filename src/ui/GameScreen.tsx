@@ -10,11 +10,12 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { personaById } from '../ai/ai';
+import { advantage, personaById } from '../ai/ai';
 import { COLORS, Move, Piece, SIZES, getLegalMoves, pieceKey, samePiece } from '../engine';
 import { useGameStore } from '../store/gameStore';
 import { ActionSheet } from './ActionSheet';
 import { BankPanel } from './BankPanel';
+import { EvalBar } from './EvalBar';
 import { GalaxyMap } from './GalaxyMap';
 import { Pyramid } from './Pyramid';
 import { ReserveGrid } from './ReserveGrid';
@@ -164,6 +165,10 @@ export function GameScreen() {
         </Text>
       )}
 
+      {settings.evalBar && game.phase !== 'setup' && game.phase !== 'finished' && (
+        <EvalBar value={advantage(game)} humanPlayer={humanPlayer} />
+      )}
+
       {/* Always-on "what do I do now" strip */}
       <TurnGuide
         game={game}
@@ -206,7 +211,7 @@ export function GameScreen() {
       {log.length > 0 && (
         <Text style={styles.ticker} numberOfLines={1}>
           Last: {log[log.length - 1].player === humanPlayer ? 'You' : 'AI'} ·{' '}
-          {log[log.length - 1].text}
+          {log[log.length - 1].explain ?? log[log.length - 1].text}
         </Text>
       )}
 
@@ -244,6 +249,7 @@ export function GameScreen() {
                   : `${persona.name} claims your homeworld.`}
               </Text>
             )}
+            <ActionButton label="Watch replay" onPress={() => setScreen('replay')} />
             <ActionButton label="New game" onPress={newGame} />
             <ActionButton
               label="Back to menu"
@@ -268,7 +274,7 @@ export function GameScreen() {
                 .reverse()
                 .map((e, i) => (
                   <Text key={i} style={styles.logEntry}>
-                    {e.player === humanPlayer ? 'You' : 'AI'} · {e.text}
+                    {e.player === humanPlayer ? 'You' : 'AI'} · {e.explain ?? e.text}
                   </Text>
                 ))}
             </ScrollView>

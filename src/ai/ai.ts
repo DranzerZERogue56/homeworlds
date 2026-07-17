@@ -82,6 +82,18 @@ export function randomPersona(difficulty: Difficulty): Persona {
 
 const BALANCED: PersonaWeights = W(1, 1, 1, 1);
 
+/**
+ * Normalized advantage for the eval bar, from player 0's perspective:
+ * -1 (player 1 winning) .. 0 (even) .. +1 (player 0 winning). tanh squashes
+ * the raw evaluation; decisive wins pin the bar.
+ */
+export function advantage(state: GameState): number {
+  // evaluate() has perspective-only terms (own defender size, color variety),
+  // so average both viewpoints to keep mirrored positions at zero.
+  const v = (evaluate(state, 0, BALANCED) - evaluate(state, 1, BALANCED)) / 2;
+  return Math.tanh(v / 350);
+}
+
 // ---------------------------------------------------------------------------
 // Evaluation
 // ---------------------------------------------------------------------------
