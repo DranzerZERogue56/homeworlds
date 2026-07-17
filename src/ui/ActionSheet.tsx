@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Move } from '../engine';
 import { Pyramid } from './Pyramid';
+import { useGameStore } from '../store/gameStore';
 import { Derived, Selection } from './selectors';
 import { colorNames, pieceColors, theme } from './theme';
 
@@ -30,14 +31,15 @@ export function ActionSheet({
 }: Props) {
   const slide = useRef(new Animated.Value(0)).current;
   const open = selection !== null;
+  const animations = useGameStore((s) => s.settings.animations);
 
   useEffect(() => {
     Animated.timing(slide, {
       toValue: open ? 1 : 0,
-      duration: 180,
+      duration: animations ? 180 : 0,
       useNativeDriver: true,
     }).start();
-  }, [open, slide]);
+  }, [open, animations, slide]);
 
   if (!selection) return null;
   const { buildMoves, tradeMoves, discoverMoves, sacrificeMove, moveTargets, attackTargets } =

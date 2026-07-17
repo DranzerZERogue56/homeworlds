@@ -1,9 +1,18 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
-import { COLORS, Color, Piece, PlayerId, System, pieceKey } from '../engine';
+import { COLORS, Color, Move, Piece, PlayerId, System, pieceKey } from '../engine';
+import { useGameStore } from '../store/gameStore';
 import { Pyramid } from './Pyramid';
 import { Selection, shipKey } from './selectors';
 import { colorNames, pieceColors, theme } from './theme';
+
+const APressable = Animated.createAnimatedComponent(Pressable);
+
+/** A transient board effect keyed by log length so each move animates once. */
+export interface MapFx {
+  key: number;
+  move: Move;
+}
 
 /** Colors with 3+ pieces at a system are one build away from a catastrophe. */
 function dangers(system: System): { color: Color; count: number }[] {
@@ -159,9 +168,143 @@ interface Props {
   actionable: Set<string>;
   recent: number[];
   interactive: boolean;
+  /** Last-move effect to animate (null = none / animations off). */
+  fx?: MapFx | null;
   onPressOwnShip: (system: number, ship: Piece) => void;
   onPressEnemyShip: (system: number, ship: Piece) => void;
   onPressSystem: (system: number) => void;
+}
+
+/** Expanding ring that plays once on mount, then reports done. */
+function FlashRing({
+  x,
+  y,
+  color,
+  big,
+  onDone,
+}: {
+  x: number;
+  y: number;
+  color: string;
+  big?: boolean;
+  onDone: () => void;
+}) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, { toValue: 1, duration: big ? 650 : 450, useNativeDriver: true }).start(
+      onDone
+    );
+  }, [anim, big, onDone]);
+  const d = big ? 150 : 80;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: x - d / 2,
+        top: y - d / 2,
+        width: d,
+        height: d,
+        borderRadius: d / 2,
+        borderWidth: big ? 3 : 2,
+        borderColor: color,
+        opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0] }),
+        transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1.5] }) }],
+      }}
+    />
+  );
+}
+
+/** Ghost ship gliding between two system centers. */
+function GlideGhost({
+  from,
+  to,
+  ship,
+  onDone,
+}: {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  ship: Piece;
+  onDone: () => void;
+}) {
+  const t = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(t, { toValue: 1, duration: 450, useNativeDriver: true }).start(onDone);
+  }, [t, onDone]);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: -20,
+        top: -20,
+        opacity: t.interpolate({ inputRange: [0, 0.8, 1], outputRange: [0.95, 0.9, 0] }),
+        transform: [
+          { translateX: t.interpolate({ inputRange: [0, 1], outputRange: [from.x, to.x] }) },
+          { translateY: t.interpolate({ inputRange: [0, 1], outputRange: [from.y, to.y] }) },
+        ],
+      }}
+    >
+      <Pyramid piece={ship} kind="shipUp" scale={0.68} />
+    </Animated.View>
+  );
+}
+
+/** Resolves the latest MapFx into flash/glide effects at node coordinates. */
+function FxLayer({ fx, byId }: { fx: MapFx | null | undefined; byId: Map<number, Layout> }) {
+  const [live, setLive] = useState<MapFx | null>(null);
+  const doneKey = useRef(-1);
+  useEffect(() => {
+    if (fx && fx.key !== doneKey.current) setLive(fx);
+  }, [fx]);
+  if (!live) return null;
+
+  const finish = () => {
+    doneKey.current = live.key;
+    setLive(null);
+  };
+  const m = live.move;
+  const at = (id: number) => byId.get(id);
+
+  if (m.type === 'move') {
+    const a = at(m.system);
+    const b = at(m.to);
+    if (a && b)
+      return (
+        <GlideGhost
+          key={live.key}
+          from={{ x: a.cx, y: a.cy }}
+          to={{ x: b.cx, y: b.cy }}
+          ship={m.ship}
+          onDone={finish}
+        />
+      );
+    const dest = b ?? a;
+    if (dest)
+      return <FlashRing key={live.key} x={dest.cx} y={dest.cy} color={theme.accent} onDone={finish} />;
+    finishSoon(finish);
+    return null;
+  }
+  if (m.type === 'catastrophe') {
+    const l = at(m.system);
+    if (l)
+      return (
+        <FlashRing key={live.key} x={l.cx} y={l.cy} color={pieceColors[m.color]} big onDone={finish} />
+      );
+  } else if (m.type === 'attack') {
+    const l = at(m.system);
+    if (l) return <FlashRing key={live.key} x={l.cx} y={l.cy} color={theme.danger} onDone={finish} />;
+  } else if (m.type === 'build' || m.type === 'trade' || m.type === 'sacrifice') {
+    const l = at(m.system);
+    if (l) return <FlashRing key={live.key} x={l.cx} y={l.cy} color={theme.accent} onDone={finish} />;
+  }
+  finishSoon(finish);
+  return null;
+}
+
+/** Clear an effect we can't draw (system already swept away). */
+function finishSoon(finish: () => void) {
+  setTimeout(finish, 0);
 }
 
 /**
@@ -294,6 +437,7 @@ export function GalaxyMap(props: Props) {
               onPressSystem={props.onPressSystem}
             />
           ))}
+        {size.w > 0 && <FxLayer fx={props.fx} byId={byId} />}
       </Animated.View>
 
       {transformed && (
@@ -336,6 +480,14 @@ function SystemNode({
   const enemy: PlayerId = humanPlayer === 0 ? 1 : 0;
   const selHere = selected?.system === system.id;
   const danger = dangers(system);
+  const animations = useGameStore((s) => s.settings.animations);
+  const mountScale = useRef(new Animated.Value(animations ? 0.6 : 1)).current;
+  useEffect(() => {
+    if (animations) {
+      Animated.spring(mountScale, { toValue: 1, friction: 6, useNativeDriver: true }).start();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const label =
     system.home === humanPlayer
@@ -345,7 +497,7 @@ function SystemNode({
       : system.name;
 
   return (
-    <Pressable
+    <APressable
       onPress={() => isMoveTarget && onPressSystem(system.id)}
       disabled={!interactive || !isMoveTarget}
       style={[
@@ -353,6 +505,7 @@ function SystemNode({
         {
           left: cx - NODE_W / 2,
           top: cy - NODE_H / 2,
+          transform: [{ scale: mountScale }],
         },
         system.home !== undefined && styles.homeNode,
         isMoveTarget && styles.targetNode,
@@ -431,7 +584,7 @@ function SystemNode({
           {recent && <Text style={styles.recentBadge}>⟡</Text>}
         </View>
       )}
-    </Pressable>
+    </APressable>
   );
 }
 

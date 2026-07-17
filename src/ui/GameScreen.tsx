@@ -16,7 +16,7 @@ import { useGameStore } from '../store/gameStore';
 import { ActionSheet } from './ActionSheet';
 import { BankPanel } from './BankPanel';
 import { EvalBar } from './EvalBar';
-import { GalaxyMap } from './GalaxyMap';
+import { GalaxyMap, MapFx } from './GalaxyMap';
 import { Pyramid } from './Pyramid';
 import { ReserveGrid } from './ReserveGrid';
 import { actionableShipKeys, derive, moveLosesGame, Selection } from './selectors';
@@ -82,6 +82,12 @@ export function GameScreen() {
     () => (game && humanTurn ? actionableShipKeys(legal, game) : new Set<string>()),
     [game, humanTurn, legal]
   );
+
+  // Last logged move drives the board effect layer (glides, rings).
+  const fx: MapFx | null = useMemo(() => {
+    const last = log[log.length - 1];
+    return last?.move ? { key: log.length, move: last.move } : null;
+  }, [log]);
 
   if (!game) return null;
 
@@ -192,6 +198,7 @@ export function GameScreen() {
         actionable={actionable}
         recent={aiLastSystems}
         interactive={humanTurn}
+        fx={settings.animations ? fx : null}
         onPressOwnShip={(system, ship) =>
           setSel(
             sel && sel.system === system && samePiece(sel.ship, ship) ? null : { system, ship }
