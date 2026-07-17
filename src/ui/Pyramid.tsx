@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, View, ViewStyle } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Piece } from '../engine';
+import { useGameStore } from '../store/gameStore';
 import { pieceColors, theme } from './theme';
 
 interface Props {
@@ -20,9 +21,11 @@ const BASE = { 1: 20, 2: 28, 3: 36 } as const;
 /** A Looney pyramid as a plain-View triangle (no image assets). */
 export function Pyramid({ piece, kind, selected, highlighted, onPress, disabled, scale = 1 }: Props) {
   const pulse = useRef(new Animated.Value(1)).current;
+  const animations = useGameStore((s) => s.settings.animations);
+  const colorblind = useGameStore((s) => s.settings.colorblind);
 
   useEffect(() => {
-    if (selected || highlighted) {
+    if ((selected || highlighted) && animations) {
       const loop = Animated.loop(
         Animated.sequence([
           Animated.timing(pulse, { toValue: 0.55, duration: 550, useNativeDriver: true }),
@@ -37,7 +40,7 @@ export function Pyramid({ piece, kind, selected, highlighted, onPress, disabled,
     }
     pulse.setValue(1);
     return undefined;
-  }, [selected, highlighted, pulse]);
+  }, [selected, highlighted, animations, pulse]);
 
   const w = Math.round(BASE[piece.size] * scale);
   const h = Math.round(w * 1.05);
@@ -191,6 +194,11 @@ export function Pyramid({ piece, kind, selected, highlighted, onPress, disabled,
         />
       )}
       {body}
+      {colorblind && (
+        <Text pointerEvents="none" style={[styles.glyph, { fontSize: 8 + 2 * piece.size }]}>
+          {piece.color.toUpperCase()}
+        </Text>
+      )}
     </Pressable>
   );
 }
@@ -204,6 +212,13 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   selected: { backgroundColor: '#26304a' },
+  glyph: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: '38%',
+    color: '#05081099',
+    fontWeight: '900',
+  },
   ring: {
     position: 'absolute',
     top: 0,

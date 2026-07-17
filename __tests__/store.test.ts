@@ -9,7 +9,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getLegalMoves } from '../src/engine';
-import { useGameStore } from '../src/store/gameStore';
+import { useGameStore, DEFAULT_SETTINGS } from '../src/store/gameStore';
 import { derive } from '../src/ui/selectors';
 import { makeState, p } from './helpers';
 
@@ -31,7 +31,7 @@ function seed(gameOverrides: Parameters<typeof makeState>[0]) {
     log: [],
     history: [],
     aiThinking: false,
-    settings: { difficulty: 'easy', humanFirst: true },
+    settings: DEFAULT_SETTINGS,
     screen: 'game',
     hydrated: true,
   });

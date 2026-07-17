@@ -138,8 +138,8 @@ function Chip({
 const styles = StyleSheet.create({
   sheet: {
     backgroundColor: theme.panelSolid,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
     borderWidth: 1,
     borderColor: theme.border,
     paddingHorizontal: 14,
@@ -156,14 +156,14 @@ const styles = StyleSheet.create({
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  title: { color: theme.text, fontWeight: '700', fontSize: 14 },
+  title: { color: theme.text, fontWeight: '700', fontSize: 14, fontFamily: theme.mono },
   cancel: { color: theme.accent, fontSize: 14, fontWeight: '600' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   chip: {
     borderWidth: 1,
     borderColor: theme.border,
     backgroundColor: theme.panel,
-    borderRadius: 10,
+    borderRadius: theme.radius,
     paddingVertical: 8,
     paddingHorizontal: 12,
   },

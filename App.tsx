@@ -6,6 +6,7 @@ import { useGameStore } from './src/store/gameStore';
 import { GameScreen } from './src/ui/GameScreen';
 import { MenuScreen } from './src/ui/MenuScreen';
 import { RulesScreen } from './src/ui/RulesScreen';
+import { SettingsScreen } from './src/ui/SettingsScreen';
 import { theme } from './src/ui/theme';
 
 export default function App() {
@@ -27,6 +28,8 @@ export default function App() {
           </View>
         ) : screen === 'menu' ? (
           <MenuScreen />
+        ) : screen === 'settings' ? (
+          <SettingsScreen />
         ) : screen === 'rules' ? (
           <RulesScreen />
         ) : (

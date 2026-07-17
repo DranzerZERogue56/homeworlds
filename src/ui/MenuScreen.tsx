@@ -106,6 +106,9 @@ export function MenuScreen() {
       <Pressable style={[styles.bigBtn, styles.ghostBtn]} onPress={() => setScreen('rules')}>
         <Text style={[styles.bigBtnText, { color: theme.accent }]}>How to play</Text>
       </Pressable>
+      <Pressable style={[styles.bigBtn, styles.ghostBtn]} onPress={() => setScreen('settings')}>
+        <Text style={[styles.bigBtnText, { color: theme.accent }]}>Settings</Text>
+      </Pressable>
     </ScrollView>
   );
 }

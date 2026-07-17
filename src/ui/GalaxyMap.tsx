@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { COLORS, Color, Piece, PlayerId, System, pieceKey } from '../engine';
 import { Pyramid } from './Pyramid';
 import { Selection, shipKey } from './selectors';
@@ -25,6 +25,9 @@ function connectedSystems(a: System, b: System): boolean {
 
 const NODE_W = 132;
 const NODE_H = 118;
+const MIN_SCALE = 0.6;
+const MAX_SCALE = 2.4;
+const GRID_STEP = 44;
 
 /** Fractional (x, y) slots for colonies, in stable order of appearance. */
 const COLONY_SLOTS: [number, number][] = [
@@ -108,17 +111,52 @@ function Line({
   );
 }
 
+/** Faint tactical grid underlay; drawn oversized so panning never shows edges. */
+function TacticalGrid({ w, h }: { w: number; h: number }) {
+  if (w === 0) return null;
+  const lines: React.ReactElement[] = [];
+  for (let x = -w; x <= 2 * w; x += GRID_STEP) {
+    lines.push(
+      <View
+        key={`v${x}`}
+        style={{ position: 'absolute', left: x, top: -h, width: 1, height: 3 * h, backgroundColor: theme.accent, opacity: 0.05 }}
+      />
+    );
+  }
+  for (let y = -h; y <= 2 * h; y += GRID_STEP) {
+    lines.push(
+      <View
+        key={`h${y}`}
+        style={{ position: 'absolute', top: y, left: -w, height: 1, width: 3 * w, backgroundColor: theme.accent, opacity: 0.05 }}
+      />
+    );
+  }
+  return <View pointerEvents="none" style={StyleSheet.absoluteFill}>{lines}</View>;
+}
+
+/** Amber corner brackets around the selected node — HUD target lock. */
+function TargetBrackets() {
+  const c = (edge: object) => (
+    <View pointerEvents="none" style={[styles.bracket, edge]} />
+  );
+  return (
+    <>
+      {c({ top: -5, left: -5, borderTopWidth: 2, borderLeftWidth: 2 })}
+      {c({ top: -5, right: -5, borderTopWidth: 2, borderRightWidth: 2 })}
+      {c({ bottom: -5, left: -5, borderBottomWidth: 2, borderLeftWidth: 2 })}
+      {c({ bottom: -5, right: -5, borderBottomWidth: 2, borderRightWidth: 2 })}
+    </>
+  );
+}
+
 interface Props {
   systems: System[];
   humanPlayer: PlayerId;
   selected: Selection | null;
-  /** System ids that are legal move destinations for the selected ship. */
   moveTargets: Set<number>;
-  /** Enemy piece keys attackable at the selected ship's system. */
   attackTargets: Set<string>;
   /** shipKey()s of own ships that offer at least one action if tapped. */
   actionable: Set<string>;
-  /** Systems the AI touched last turn. */
   recent: number[];
   interactive: boolean;
   onPressOwnShip: (system: number, ship: Piece) => void;
@@ -127,36 +165,83 @@ interface Props {
 }
 
 /**
- * The playing field as a 2D star map: homeworlds pinned top/bottom, colonies
- * floating between, connection lines shown for the selected ship's reach.
- * Pure Views — no SVG or image assets.
+ * The playing field as a pinch-zoomable, pannable 2D star map with a HUD
+ * tactical grid. Pure Views + PanResponder — no native gesture deps.
  */
-export function GalaxyMap({
-  systems,
-  humanPlayer,
-  selected,
-  moveTargets,
-  attackTargets,
-  actionable,
-  recent,
-  interactive,
-  onPressOwnShip,
-  onPressEnemyShip,
-  onPressSystem,
-}: Props) {
+export function GalaxyMap(props: Props) {
   const [size, setSize] = useState({ w: 0, h: 0 });
-  const layouts = layoutSystems(systems, humanPlayer, size.w, size.h);
-  const byId = new Map(layouts.map((l) => [l.system.id, l]));
-  const selLayout = selected ? byId.get(selected.system) : undefined;
+  const [transformed, setTransformed] = useState(false);
 
-  // Faint web of all connections while a ship is selected; bright lines to
-  // legal move targets.
+  const scale = useRef(new Animated.Value(1)).current;
+  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  // Committed values (Animated values are write-mostly).
+  const cur = useRef({ scale: 1, x: 0, y: 0 });
+  const gesture = useRef({ startDist: 0, startScale: 1, startX: 0, startY: 0 });
+
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+  const responder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (evt, g) =>
+        g.numberActiveTouches === 2 || Math.abs(g.dx) + Math.abs(g.dy) > 14,
+      onPanResponderGrant: (evt) => {
+        gesture.current.startScale = cur.current.scale;
+        gesture.current.startX = cur.current.x;
+        gesture.current.startY = cur.current.y;
+        gesture.current.startDist = 0;
+      },
+      onPanResponderMove: (evt, g) => {
+        const touches = evt.nativeEvent.touches;
+        if (touches.length >= 2) {
+          const dx = touches[0].pageX - touches[1].pageX;
+          const dy = touches[0].pageY - touches[1].pageY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (gesture.current.startDist === 0) {
+            gesture.current.startDist = dist;
+            gesture.current.startScale = cur.current.scale;
+          } else {
+            const next = clamp(
+              gesture.current.startScale * (dist / gesture.current.startDist),
+              MIN_SCALE,
+              MAX_SCALE
+            );
+            cur.current.scale = next;
+            scale.setValue(next);
+          }
+        } else {
+          const limit = 600 * cur.current.scale;
+          cur.current.x = clamp(gesture.current.startX + g.dx, -limit, limit);
+          cur.current.y = clamp(gesture.current.startY + g.dy, -limit, limit);
+          pan.setValue({ x: cur.current.x, y: cur.current.y });
+        }
+      },
+      onPanResponderRelease: () => {
+        setTransformed(
+          cur.current.scale !== 1 || cur.current.x !== 0 || cur.current.y !== 0
+        );
+      },
+    })
+  ).current;
+
+  const resetView = () => {
+    cur.current = { scale: 1, x: 0, y: 0 };
+    Animated.parallel([
+      Animated.timing(scale, { toValue: 1, duration: 160, useNativeDriver: true }),
+      Animated.timing(pan, { toValue: { x: 0, y: 0 }, duration: 160, useNativeDriver: true }),
+    ]).start(() => setTransformed(false));
+  };
+
+  const layouts = layoutSystems(props.systems, props.humanPlayer, size.w, size.h);
+  const byId = new Map(layouts.map((l) => [l.system.id, l]));
+  const selLayout = props.selected ? byId.get(props.selected.system) : undefined;
+
   const lines: React.ReactElement[] = [];
   if (selLayout) {
     for (const l of layouts) {
       if (l.system.id === selLayout.system.id) continue;
       if (!connectedSystems(selLayout.system, l.system)) continue;
-      const isTarget = moveTargets.has(l.system.id);
+      const isTarget = props.moveTargets.has(l.system.id);
       lines.push(
         <Line
           key={`ln${l.system.id}`}
@@ -173,34 +258,49 @@ export function GalaxyMap({
 
   return (
     <View
-      style={styles.field}
+      style={styles.viewport}
       onLayout={(e) =>
         setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })
       }
+      {...responder.panHandlers}
     >
-      {size.w > 0 && lines}
-      {size.w > 0 &&
-        layouts.map((l) => (
-          <SystemNode
-            key={l.system.id}
-            layout={l}
-            humanPlayer={humanPlayer}
-            selected={selected}
-            isMoveTarget={moveTargets.has(l.system.id)}
-            attackTargets={attackTargets}
-            actionable={actionable}
-            recent={recent.includes(l.system.id)}
-            interactive={interactive}
-            dimmed={
-              selected !== null &&
-              l.system.id !== selected.system &&
-              !moveTargets.has(l.system.id)
-            }
-            onPressOwnShip={onPressOwnShip}
-            onPressEnemyShip={onPressEnemyShip}
-            onPressSystem={onPressSystem}
-          />
-        ))}
+      <Animated.View
+        style={[
+          styles.field,
+          { transform: [{ translateX: pan.x }, { translateY: pan.y }, { scale }] },
+        ]}
+      >
+        <TacticalGrid w={size.w} h={size.h} />
+        {size.w > 0 && lines}
+        {size.w > 0 &&
+          layouts.map((l) => (
+            <SystemNode
+              key={l.system.id}
+              layout={l}
+              humanPlayer={props.humanPlayer}
+              selected={props.selected}
+              isMoveTarget={props.moveTargets.has(l.system.id)}
+              attackTargets={props.attackTargets}
+              actionable={props.actionable}
+              recent={props.recent.includes(l.system.id)}
+              interactive={props.interactive}
+              dimmed={
+                props.selected !== null &&
+                l.system.id !== props.selected.system &&
+                !props.moveTargets.has(l.system.id)
+              }
+              onPressOwnShip={props.onPressOwnShip}
+              onPressEnemyShip={props.onPressEnemyShip}
+              onPressSystem={props.onPressSystem}
+            />
+          ))}
+      </Animated.View>
+
+      {transformed && (
+        <Pressable style={styles.resetBtn} onPress={resetView} hitSlop={8}>
+          <Text style={styles.resetText}>⌖ RESET VIEW</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -260,6 +360,8 @@ function SystemNode({
         dimmed && { opacity: 0.35 },
       ]}
     >
+      {selHere && <TargetBrackets />}
+
       {/* Enemy ships (point down) */}
       <View style={styles.shipRow}>
         {system.ships[enemy].map((ship, i) => {
@@ -334,12 +436,13 @@ function SystemNode({
 }
 
 const styles = StyleSheet.create({
+  viewport: { flex: 1, overflow: 'hidden' },
   field: { flex: 1 },
   node: {
     position: 'absolute',
     width: NODE_W,
     minHeight: NODE_H,
-    borderRadius: 14,
+    borderRadius: theme.radius + 2,
     borderWidth: 1,
     borderColor: theme.border,
     backgroundColor: theme.panel,
@@ -347,9 +450,15 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 4,
   },
-  homeNode: { borderColor: '#4a5a8f', backgroundColor: theme.panelHi },
+  homeNode: { borderColor: '#3d5a8a', backgroundColor: theme.panelHi },
   targetNode: { borderColor: theme.highlight, borderWidth: 2 },
   selNode: { borderColor: theme.accent, borderWidth: 2 },
+  bracket: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderColor: theme.highlight,
+  },
   shipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -358,15 +467,39 @@ const styles = StyleSheet.create({
     minHeight: 24,
   },
   starRow: { flexDirection: 'row', alignItems: 'center' },
-  name: { color: theme.textDim, fontSize: 10, fontWeight: '700', marginTop: 2 },
+  name: {
+    color: theme.textDim,
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 2,
+    fontFamily: theme.mono,
+  },
   badgeRow: { flexDirection: 'row', gap: 4, marginTop: 2, alignItems: 'center' },
   dangerBadge: {
     fontSize: 9,
     fontWeight: '700',
     borderWidth: 1,
-    borderRadius: 5,
+    borderRadius: 3,
     paddingHorizontal: 3,
     overflow: 'hidden',
   },
   recentBadge: { color: theme.accent, fontSize: 10, fontWeight: '700' },
+  resetBtn: {
+    position: 'absolute',
+    right: 10,
+    bottom: 10,
+    borderWidth: 1,
+    borderColor: theme.accent,
+    borderRadius: theme.radius,
+    backgroundColor: theme.panelSolid,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+  },
+  resetText: {
+    color: theme.accent,
+    fontSize: 10,
+    fontWeight: '800',
+    fontFamily: theme.mono,
+    letterSpacing: 1,
+  },
 });

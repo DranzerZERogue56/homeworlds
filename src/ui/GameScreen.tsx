@@ -87,6 +87,12 @@ export function GameScreen() {
   // All tappable options derive from getLegalMoves via the tested selector.
   const d = derive(legal, sel);
 
+  const commit = (move: Move) => {
+    setSel(null);
+    setDiscoverOpen(false);
+    playHuman(move);
+  };
+
   const play = (move: Move) => {
     // Guard rail: warn before a move that immediately loses the game
     // (abandoning or sacrificing the last ship at your homeworld).
@@ -96,22 +102,19 @@ export function GameScreen() {
         'Your homeworld would be left without your ships and destroyed. Do it anyway?',
         [
           { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Do it',
-            style: 'destructive',
-            onPress: () => {
-              setSel(null);
-              setDiscoverOpen(false);
-              playHuman(move);
-            },
-          },
+          { text: 'Do it', style: 'destructive', onPress: () => commit(move) },
         ]
       );
       return;
     }
-    setSel(null);
-    setDiscoverOpen(false);
-    playHuman(move);
+    if (settings.confirmMoves && move.type !== 'end') {
+      Alert.alert('Commit this move?', '', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Commit', onPress: () => commit(move) },
+      ]);
+      return;
+    }
+    commit(move);
   };
 
   const sysName = (id: number) => game.systems.find((s) => s.id === id)?.name ?? '?';
@@ -149,6 +152,17 @@ export function GameScreen() {
       </View>
 
       {aiThinking && <ActivityIndicator color={theme.accent} style={{ marginBottom: 2 }} />}
+
+      {/* HUD data readout */}
+      {game.phase !== 'setup' && (
+        <Text style={styles.readout}>
+          {`SYS:${String(game.systems.length).padStart(2, '0')}  FLT:${String(
+            game.systems.reduce((n, s) => n + s.ships[humanPlayer].length, 0)
+          ).padStart(2, '0')}/${String(
+            game.systems.reduce((n, s) => n + s.ships[humanPlayer === 0 ? 1 : 0].length, 0)
+          ).padStart(2, '0')}  TRN:${String(game.turn).padStart(2, '0')}`}
+        </Text>
+      )}
 
       {/* Always-on "what do I do now" strip */}
       <TurnGuide
@@ -383,6 +397,15 @@ const styles = StyleSheet.create({
   },
   headerBtn: { color: theme.accent, fontSize: 14, fontWeight: '600' },
   headerTitle: { color: theme.text, fontSize: 14, fontWeight: '700' },
+  readout: {
+    color: theme.accent,
+    fontFamily: theme.mono,
+    fontSize: 11,
+    letterSpacing: 1,
+    textAlign: 'center',
+    paddingBottom: 4,
+    opacity: 0.85,
+  },
   disabled: { color: theme.textDim, opacity: 0.5 },
   ticker: {
     color: theme.textDim,

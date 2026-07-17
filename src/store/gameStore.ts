@@ -21,14 +21,31 @@ export interface LogEntry {
 export interface Settings {
   difficulty: Difficulty;
   humanFirst: boolean;
+  /** Master switch for UI motion (pulses, slides, glides). */
+  animations: boolean;
+  /** Show the live advantage meter during play (always on in replays). */
+  evalBar: boolean;
+  /** Ask before committing any move. */
+  confirmMoves: boolean;
+  /** Add letter glyphs to pieces for colorblind players. */
+  colorblind: boolean;
 }
+
+export const DEFAULT_SETTINGS: Settings = {
+  difficulty: 'easy',
+  humanFirst: true,
+  animations: true,
+  evalBar: false,
+  confirmMoves: false,
+  colorblind: false,
+};
 
 interface Snapshot {
   game: GameState;
   log: LogEntry[];
 }
 
-export type Screen = 'menu' | 'game' | 'rules';
+export type Screen = 'menu' | 'game' | 'rules' | 'settings';
 
 interface Store {
   screen: Screen;
@@ -116,7 +133,7 @@ async function runAI(
 
 export const useGameStore = create<Store>((set, get) => ({
   screen: 'menu',
-  settings: { difficulty: 'easy', humanFirst: true },
+  settings: DEFAULT_SETTINGS,
   game: null,
   log: [],
   history: [],
@@ -189,7 +206,7 @@ export const useGameStore = create<Store>((set, get) => ({
       if (raw) {
         const data = JSON.parse(raw);
         set({
-          settings: data.settings ?? get().settings,
+          settings: { ...DEFAULT_SETTINGS, ...(data.settings ?? {}) },
           game: data.game ?? null,
           log: data.log ?? [],
           history: data.history ?? [],
