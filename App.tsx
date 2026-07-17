@@ -8,6 +8,7 @@ import { MenuScreen } from './src/ui/MenuScreen';
 import { RulesScreen } from './src/ui/RulesScreen';
 import { SettingsScreen } from './src/ui/SettingsScreen';
 import { ReplayScreen } from './src/ui/ReplayScreen';
+import { AcademyScreen } from './src/ui/AcademyScreen';
 import { theme } from './src/ui/theme';
 
 export default function App() {
@@ -29,6 +30,8 @@ export default function App() {
           </View>
         ) : screen === 'menu' ? (
           <MenuScreen />
+        ) : screen === 'academy' ? (
+          <AcademyScreen />
         ) : screen === 'replay' ? (
           <ReplayScreen />
         ) : screen === 'settings' ? (

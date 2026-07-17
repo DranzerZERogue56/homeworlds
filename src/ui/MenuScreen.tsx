@@ -109,6 +109,9 @@ export function MenuScreen() {
           <Text style={[styles.bigBtnText, { color: theme.accent }]}>Replay last game</Text>
         </Pressable>
       )}
+      <Pressable style={[styles.bigBtn, styles.ghostBtn]} onPress={() => setScreen('academy')}>
+        <Text style={[styles.bigBtnText, { color: theme.accent }]}>Fleet Academy</Text>
+      </Pressable>
       <Pressable style={[styles.bigBtn, styles.ghostBtn]} onPress={() => setScreen('rules')}>
         <Text style={[styles.bigBtnText, { color: theme.accent }]}>How to play</Text>
       </Pressable>

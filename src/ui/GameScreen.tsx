@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { advantage, personaById } from '../ai/ai';
 import { COLORS, Move, Piece, SIZES, getLegalMoves, pieceKey, samePiece } from '../engine';
+import { scenarioById } from '../scenarios/scenarios';
 import { useGameStore } from '../store/gameStore';
 import { ActionSheet } from './ActionSheet';
 import { BankPanel } from './BankPanel';
@@ -35,6 +36,9 @@ export function GameScreen() {
   const aiLastSystems = useGameStore((s) => s.aiLastSystems);
   const settings = useGameStore((s) => s.settings);
   const personaId = useGameStore((s) => s.personaId);
+  const scenarioId = useGameStore((s) => s.scenarioId);
+  const startScenario = useGameStore((s) => s.startScenario);
+  const exitScenario = useGameStore((s) => s.exitScenario);
   const playHuman = useGameStore((s) => s.playHuman);
   const undo = useGameStore((s) => s.undo);
   const abandonGame = useGameStore((s) => s.abandonGame);
@@ -90,6 +94,10 @@ export function GameScreen() {
   }, [log]);
 
   if (!game) return null;
+
+  const scenario = scenarioById(scenarioId);
+  const scenarioMoves = log.map((e) => e.move).filter((m): m is Move => !!m);
+  const scenarioResult = scenario ? scenario.goal(game, scenarioMoves) : null;
 
   // All tappable options derive from getLegalMoves via the tested selector.
   const d = derive(legal, sel);
@@ -175,6 +183,13 @@ export function GameScreen() {
         <EvalBar value={advantage(game)} humanPlayer={humanPlayer} />
       )}
 
+      {scenario && (
+        <View style={styles.scenarioStrip}>
+          <Text style={styles.scenarioTitle}>{scenario.title}</Text>
+          <Text style={styles.scenarioText}>{scenario.objective}</Text>
+        </View>
+      )}
+
       {/* Always-on "what do I do now" strip */}
       <TurnGuide
         game={game}
@@ -238,8 +253,33 @@ export function GameScreen() {
       {/* Guided homeworld setup */}
       {humanTurn && game.phase === 'setup' && <SetupPanel legal={legal} onPlay={play} />}
 
+      {/* Scenario result overlay */}
+      {scenario && scenarioResult && (
+        <View style={styles.overlay}>
+          <View style={styles.overlayCard}>
+            <Text style={styles.overlayTitle}>
+              {scenarioResult === 'won' ? 'Objective complete! ✓' : 'Simulation failed'}
+            </Text>
+            <Text style={styles.overlaySub}>
+              {scenarioResult === 'won'
+                ? scenario.kind === 'tutorial'
+                  ? 'Lesson learned.'
+                  : 'A textbook maneuver.'
+                : 'Your turn ended without meeting the objective.'}
+            </Text>
+            {scenarioResult === 'lost' && (
+              <ActionButton label="Retry" onPress={() => startScenario(scenario.id)} />
+            )}
+            <ActionButton
+              label="Back to Academy"
+              onPress={() => exitScenario({ completed: scenarioResult === 'won' })}
+            />
+          </View>
+        </View>
+      )}
+
       {/* Game over overlay */}
-      {game.phase === 'finished' && (
+      {!scenario && game.phase === 'finished' && (
         <View style={styles.overlay}>
           <View style={styles.overlayCard}>
             <Text style={styles.overlayTitle}>
@@ -410,6 +450,25 @@ const styles = StyleSheet.create({
   },
   headerBtn: { color: theme.accent, fontSize: 14, fontWeight: '600' },
   headerTitle: { color: theme.text, fontSize: 14, fontWeight: '700' },
+  scenarioStrip: {
+    marginHorizontal: 10,
+    marginBottom: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: theme.radius + 2,
+    borderWidth: 1,
+    borderColor: theme.highlight,
+    backgroundColor: theme.panelHi,
+  },
+  scenarioTitle: {
+    color: theme.highlight,
+    fontSize: 12,
+    fontWeight: '800',
+    fontFamily: theme.mono,
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  scenarioText: { color: theme.text, fontSize: 12 },
   readout: {
     color: theme.accent,
     fontFamily: theme.mono,

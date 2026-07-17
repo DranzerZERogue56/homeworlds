@@ -10,6 +10,7 @@ import {
 } from '../engine';
 import { Difficulty, chooseMove, personaById, randomPersona } from '../ai/ai';
 import { explainMove } from '../ai/explain';
+import { scenarioById } from '../scenarios/scenarios';
 
 const SAVE_KEY = 'homeworlds:save:v1';
 
@@ -50,7 +51,7 @@ interface Snapshot {
   log: LogEntry[];
 }
 
-export type Screen = 'menu' | 'game' | 'rules' | 'settings' | 'replay';
+export type Screen = 'menu' | 'game' | 'rules' | 'settings' | 'replay' | 'academy';
 
 interface Store {
   screen: Screen;
@@ -66,8 +67,16 @@ interface Store {
   hydrated: boolean;
   /** Systems the AI touched on its last turn (for the "what changed" highlight). */
   aiLastSystems: number[];
+  /** Active Academy scenario id; scenarios never run the AI. */
+  scenarioId: string | null;
+  /** Real game stashed while a scenario is played. */
+  scenarioBackup: Snapshot | null;
+  /** Completed scenario ids. */
+  scenarioDone: Record<string, boolean>;
 
   setScreen: (s: Screen) => void;
+  startScenario: (id: string) => void;
+  exitScenario: (opts?: { completed?: boolean }) => void;
   setSettings: (s: Partial<Settings>) => void;
   newGame: () => void;
   abandonGame: () => void;
@@ -80,11 +89,11 @@ interface Store {
 let aiRunning = false;
 
 async function persist(get: () => Store): Promise<void> {
-  const { game, log, history, settings, humanPlayer, personaId, aiLastSystems } = get();
+  const { game, log, history, settings, humanPlayer, personaId, aiLastSystems, scenarioDone } = get();
   try {
     await AsyncStorage.setItem(
       SAVE_KEY,
-      JSON.stringify({ game, log, history, settings, humanPlayer, personaId, aiLastSystems })
+      JSON.stringify({ game, log, history, settings, humanPlayer, personaId, aiLastSystems, scenarioDone })
     );
   } catch {
     // Persistence is best-effort; never crash gameplay over it.
@@ -153,8 +162,45 @@ export const useGameStore = create<Store>((set, get) => ({
   aiThinking: false,
   hydrated: false,
   aiLastSystems: [],
+  scenarioId: null,
+  scenarioBackup: null,
+  scenarioDone: {},
 
   setScreen: (screen) => set({ screen }),
+
+  startScenario: (id) => {
+    const sc = scenarioById(id);
+    if (!sc) return;
+    const { game, log, scenarioId, scenarioBackup } = get();
+    set({
+      // Keep the original backup if a scenario is already active.
+      scenarioBackup: scenarioId ? scenarioBackup : game ? { game, log } : null,
+      scenarioId: id,
+      game: sc.setup(),
+      log: [],
+      history: [],
+      humanPlayer: 0,
+      screen: 'game',
+      aiLastSystems: [],
+    });
+  },
+
+  exitScenario: (opts) => {
+    const { scenarioBackup, scenarioId, scenarioDone } = get();
+    set({
+      scenarioId: null,
+      scenarioBackup: null,
+      scenarioDone:
+        opts?.completed && scenarioId
+          ? { ...scenarioDone, [scenarioId]: true }
+          : scenarioDone,
+      game: scenarioBackup?.game ?? null,
+      log: scenarioBackup?.log ?? [],
+      history: [],
+      screen: 'academy',
+    });
+    void persist(get);
+  },
 
   setSettings: (partial) => {
     set({ settings: { ...get().settings, ...partial } });
@@ -171,13 +217,23 @@ export const useGameStore = create<Store>((set, get) => ({
       personaId: randomPersona(settings.difficulty).id,
       screen: 'game',
       aiLastSystems: [],
+      scenarioId: null,
+      scenarioBackup: null,
     });
     void persist(get);
     void runAI(get, set);
   },
 
   abandonGame: () => {
-    set({ game: null, log: [], history: [], screen: 'menu', aiLastSystems: [] });
+    set({
+      game: null,
+      log: [],
+      history: [],
+      screen: 'menu',
+      aiLastSystems: [],
+      scenarioId: null,
+      scenarioBackup: null,
+    });
     void persist(get);
   },
 
@@ -195,8 +251,10 @@ export const useGameStore = create<Store>((set, get) => ({
       ],
       history: isTurnStart ? [...history, { game, log }] : history,
     });
-    void persist(get);
-    void runAI(get, set);
+    if (!get().scenarioId) {
+      void persist(get);
+      void runAI(get, set);
+    }
   },
 
   undo: () => {
@@ -224,6 +282,7 @@ export const useGameStore = create<Store>((set, get) => ({
           humanPlayer: data.humanPlayer ?? 0,
           personaId: data.personaId ?? null,
           aiLastSystems: data.aiLastSystems ?? [],
+          scenarioDone: data.scenarioDone ?? {},
           screen: data.game && data.game.phase !== 'finished' ? 'game' : 'menu',
         });
       }
