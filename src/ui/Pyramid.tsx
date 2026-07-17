@@ -109,7 +109,65 @@ export function Pyramid({ piece, kind, selected, highlighted, onPress, disabled,
         />
       </View>
     ) : (
-      <View style={{ width: 0, height: 0, ...triangle }} />
+      // Ships: colored hull triangle with a shaded inner keel and an engine
+      // glow at the base (below for own ships, above for enemy ships).
+      <View style={{ alignItems: 'center' }}>
+        {kind === 'shipDown' && (
+          <View
+            style={{
+              width: w * 0.55,
+              height: 3,
+              borderRadius: 2,
+              backgroundColor: color,
+              opacity: 0.9,
+              marginBottom: 1,
+            }}
+          />
+        )}
+        <View style={{ width: w, height: h, alignItems: 'center' }}>
+          {/* faint halo behind the hull */}
+          <View
+            style={{
+              position: 'absolute',
+              top: h * 0.15,
+              width: w * 1.1,
+              height: h * 0.9,
+              borderRadius: w * 0.55,
+              backgroundColor: color,
+              opacity: 0.14,
+            }}
+          />
+          <View style={{ position: 'absolute', width: 0, height: 0, ...triangle }} />
+          {/* shaded keel: smaller dark triangle anchored to the base */}
+          <View
+            style={{
+              position: 'absolute',
+              [kind === 'shipDown' ? 'top' : 'bottom']: 0,
+              width: 0,
+              height: 0,
+              borderLeftWidth: w * 0.28,
+              borderRightWidth: w * 0.28,
+              borderLeftColor: 'transparent',
+              borderRightColor: 'transparent',
+              ...(kind === 'shipDown'
+                ? { borderTopWidth: h * 0.45, borderTopColor: '#0b102080' }
+                : { borderBottomWidth: h * 0.45, borderBottomColor: '#0b102080' }),
+            }}
+          />
+        </View>
+        {kind === 'shipUp' && (
+          <View
+            style={{
+              width: w * 0.55,
+              height: 3,
+              borderRadius: 2,
+              backgroundColor: color,
+              opacity: 0.9,
+              marginTop: 1,
+            }}
+          />
+        )}
+      </View>
     );
 
   return (

@@ -17,6 +17,7 @@ import { ActionSheet } from './ActionSheet';
 import { BankPanel } from './BankPanel';
 import { GalaxyMap } from './GalaxyMap';
 import { Pyramid } from './Pyramid';
+import { ReserveGrid } from './ReserveGrid';
 import { actionableShipKeys, derive, moveLosesGame, Selection } from './selectors';
 import { Starfield } from './Starfield';
 import { TurnGuide } from './TurnGuide';
@@ -292,13 +293,17 @@ function ActionButton({ label, onPress }: { label: string; onPress: () => void }
   );
 }
 
-/** Three-step homeworld chooser: star, star, first ship. */
+/** Three-step homeworld chooser: star, star, first ship — stellar-reserve style. */
 function SetupPanel({ legal, onPlay }: { legal: Move[]; onPlay: (m: Move) => void }) {
   const game = useGameStore((s) => s.game)!;
   const [picks, setPicks] = useState<Piece[]>([]);
 
-  const remaining = (piece: Piece) =>
-    (game.bank[pieceKey(piece)] ?? 0) - picks.filter((p) => samePiece(p, piece)).length;
+  // Reserve stock with the current picks already subtracted.
+  const counts = { ...game.bank };
+  for (const p of picks) counts[pieceKey(p)] = (counts[pieceKey(p)] ?? 0) - 1;
+  const pickableKeys = new Set(
+    COLORS.flatMap((c) => SIZES.map((s) => `${c}${s}`)).filter((k) => (counts[k] ?? 0) > 0)
+  );
 
   const slotLabels = ['Star 1', 'Star 2', 'First ship'];
   const done = picks.length === 3;
@@ -320,9 +325,12 @@ function SetupPanel({ legal, onPlay }: { legal: Move[]; onPlay: (m: Move) => voi
 
   return (
     <View style={styles.setupPanel}>
+      <View style={StyleSheet.absoluteFill}>
+        <Starfield seed={11} />
+      </View>
       <View style={styles.setupHeader}>
         <Text style={styles.setupTitle}>
-          {done ? 'Confirm your homeworld' : `Pick: ${slotLabels[picks.length]}`}
+          {done ? 'Confirm your homeworld' : `Draw from the reserve: ${slotLabels[picks.length]}`}
         </Text>
         {picks.length > 0 && (
           <Pressable onPress={() => setPicks([])} hitSlop={8}>
@@ -331,41 +339,32 @@ function SetupPanel({ legal, onPlay }: { legal: Move[]; onPlay: (m: Move) => voi
         )}
       </View>
 
-      <View style={[styles.chipRow, { minHeight: 44, alignItems: 'flex-end' }]}>
-        {picks.map((p, i) => (
-          <View key={i} style={{ alignItems: 'center' }}>
-            <Pyramid piece={p} kind={i < 2 ? 'star' : 'shipUp'} />
-            <Text style={styles.hint}>{slotLabels[i]}</Text>
+      {/* Chosen pieces so far */}
+      <View style={styles.setupPicksRow}>
+        {slotLabels.map((label, i) => (
+          <View key={label} style={[styles.setupSlot, picks[i] && styles.setupSlotFilled]}>
+            {picks[i] ? (
+              <Pyramid piece={picks[i]} kind={i < 2 ? 'star' : 'shipUp'} scale={0.8} />
+            ) : (
+              <Text style={styles.setupSlotEmpty}>{i === picks.length ? '▾' : ''}</Text>
+            )}
+            <Text style={styles.hint}>{label}</Text>
           </View>
         ))}
       </View>
 
       {!done && (
-        <View>
-          {COLORS.map((c) => (
-            <View key={c} style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={[styles.hint, { width: 52 }]}>{colorNames[c]}</Text>
-              {SIZES.map((s) => {
-                const piece = { color: c, size: s };
-                const left = remaining(piece);
-                return (
-                  <View key={s} style={{ alignItems: 'center', width: 56 }}>
-                    <Pyramid
-                      piece={piece}
-                      kind="shipUp"
-                      disabled={left <= 0}
-                      onPress={left > 0 ? () => setPicks([...picks, piece]) : undefined}
-                    />
-                    <Text style={styles.hint}>×{left}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          ))}
-          <Text style={styles.hint}>
+        <>
+          <ReserveGrid
+            counts={counts}
+            pickable={pickableKeys}
+            onPick={(piece) => setPicks([...picks, piece])}
+            scale={0.55}
+          />
+          <Text style={[styles.hint, { textAlign: 'center' }]}>
             Tip: two different star sizes reach more of the galaxy; a green ship lets you build.
           </Text>
-        </View>
+        </>
       )}
 
       {done && <ActionButton label="Found homeworld" onPress={confirm} />}
@@ -405,13 +404,29 @@ const styles = StyleSheet.create({
   btnText: { color: theme.text, fontSize: 13, fontWeight: '600', textAlign: 'center' },
   hint: { color: theme.textDim, fontSize: 11, marginTop: 4 },
   setupPanel: {
-    backgroundColor: theme.panelSolid,
+    backgroundColor: theme.bg,
     borderTopWidth: 1,
     borderColor: theme.border,
     padding: 12,
+    overflow: 'hidden',
   },
   setupHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   setupTitle: { color: theme.text, fontWeight: '700', fontSize: 14 },
+  setupPicksRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 8 },
+  setupSlot: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    minWidth: 72,
+    minHeight: 56,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 10,
+    borderStyle: 'dashed',
+    paddingVertical: 4,
+    backgroundColor: theme.panel,
+  },
+  setupSlotFilled: { borderStyle: 'solid', borderColor: theme.accent },
+  setupSlotEmpty: { color: theme.textDim, fontSize: 16 },
   logEntry: { color: theme.textDim, fontSize: 12, paddingVertical: 2 },
   overlay: {
     position: 'absolute',
